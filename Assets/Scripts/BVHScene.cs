@@ -84,6 +84,7 @@ public class BVHScene : MonoBehaviour
             }
 
             totalVertexCount += Utilities.GetTriangleCount(mesh) * 3;
+            mesh.UploadMeshData(false);
         }
 
         // Allocate buffers
@@ -103,14 +104,15 @@ public class BVHScene : MonoBehaviour
 
             Debug.Log("Processing mesh: " + renderer.gameObject.name);
 
-            mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
+            //mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
             GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
 
-            mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
+            //mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
             GraphicsBuffer indexBuffer = null;
             try {
                 indexBuffer = mesh.GetIndexBuffer();
-            } catch (Exception) {
+            } catch (Exception e) {
+                Debug.Log(e.Message);
             }
             
             int triangleCount = Utilities.GetTriangleCount(mesh);
