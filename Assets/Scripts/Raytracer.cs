@@ -5,27 +5,28 @@ using UnityEngine.Rendering;
 [RequireComponent(typeof(Camera))]
 public class Raytracer : MonoBehaviour
 {
-    private Camera sourceCamera;
-    private BVHScene bvhScene;
-    private CommandBuffer cmd;
+    Camera sourceCamera;
+    BVHScene bvhScene;
+    CommandBuffer cmd;
 
-    private ComputeShader pathTracerShader;
-    private Material presentationMaterial;
+    ComputeShader pathTracerShader;
+    Material presentationMaterial;
 
-    private int outputWidth;
-    private int outputHeight;
-    private int totalRays;
-    private RenderTexture[] outputRT = { null, null };
-    private int currentRT = 0;
-    private int currentSample = 0;
+    int outputWidth;
+    int outputHeight;
+    int totalRays;
+    RenderTexture[] outputRT = { null, null };
+    ComputeBuffer rngStateBuffer = null;
+    int currentRT = 0;
+    int currentSample = 0;
 
     // Sun for NDotL
-    private Vector3 lightDirection = new Vector3(1.0f, 1.0f, 1.0f).normalized;
-    private Vector4 lightColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+    Vector3 lightDirection = new Vector3(1.0f, 1.0f, 1.0f).normalized;
+    Vector4 lightColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 
     // Struct sizes in bytes
-    private const int RayStructSize = 24;
-    private const int RayHitStructSize = 20;
+    const int RayStructSize = 24;
+    const int RayHitStructSize = 20;
 
     void Start()
     {
@@ -57,6 +58,7 @@ public class Raytracer : MonoBehaviour
 
     void OnDestroy()
     {
+        rngStateBuffer?.Release();
         outputRT[0]?.Release();
         outputRT[1]?.Release();
         cmd?.Release();
@@ -67,7 +69,7 @@ public class Raytracer : MonoBehaviour
         currentSample = 0;
     }
 
-    private void OnRenderImage(RenderTexture source, RenderTexture destination)
+    void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
         if (bvhScene == null || !bvhScene.CanRender())
         {
@@ -90,6 +92,23 @@ public class Raytracer : MonoBehaviour
             ResetSamples();
         }
 
+        if (rngStateBuffer != null && (rngStateBuffer.count != totalRays || currentSample == 0))
+        {
+            rngStateBuffer?.Release();
+            rngStateBuffer = null;
+        }
+
+        if (rngStateBuffer == null)
+        {
+            rngStateBuffer = new ComputeBuffer(totalRays, 4);
+            uint[] rngStateData = new uint[totalRays];
+            for (int i = 0; i < totalRays; i++)
+            {
+                rngStateData[i] = (uint)Random.Range(0, uint.MaxValue);
+            }
+            rngStateBuffer.SetData(rngStateData);
+        }
+       
         cmd.BeginSample("Path Tracer");
         {
             PrepareShader(cmd, pathTracerShader, 0);
@@ -102,10 +121,13 @@ public class Raytracer : MonoBehaviour
         cmd.EndSample("Path Tracer");
 
         presentationMaterial.SetTexture("_MainTex", outputRT[currentRT]);
+        presentationMaterial.SetInt("OutputWidth", outputWidth);
+        presentationMaterial.SetInt("OutputHeight", outputHeight);
         presentationMaterial.SetInt("Samples", currentSample);
 
         // Overwrite image with output from raytracer
         cmd.Blit(outputRT[currentRT], destination, presentationMaterial);
+
         currentRT = 1 - currentRT;
         currentSample++;
 
@@ -113,7 +135,7 @@ public class Raytracer : MonoBehaviour
         cmd.Clear();
     }
 
-    private void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
+    void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
     {
         cmd.SetComputeVectorParam(shader, "LightDirection", lightDirection);
         cmd.SetComputeVectorParam(shader, "LightColor", lightColor);
@@ -124,6 +146,6 @@ public class Raytracer : MonoBehaviour
         cmd.SetComputeIntParam(shader, "CurrentSample", currentSample);
         cmd.SetComputeTextureParam(shader, kernelIndex, "Output", outputRT[currentRT]);
         cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", outputRT[1 - currentRT]);
-        
+        cmd.SetComputeBufferParam(shader, 0, "RNGStateBuffer", rngStateBuffer);
     }
 }

@@ -110,6 +110,16 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
     return hitmask;
 }
 
+float2 InterpolateAttribute(float2 barycentric, float2 attr0, float2 attr1, float2 attr2)
+{
+    return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
+}
+
+float3 InterpolateAttribute(float2 barycentric, float3 attr0, float3 attr1, float3 attr2)
+{
+    return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
+}
+
 void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
 {
     float3 v0 = BVHTris[triAddr].xyz;
@@ -136,18 +146,55 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
                 
                 if (d > 0.0f && d < hit.t)
                 {
-                    hit.t = d;
                     hit.barycentric = float2(u, v);
                     hit.triIndex = asuint(BVHTris[triAddr].w);
+
+                    TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
+                    hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+                    // Skip the back face of the triangle
+                    if (dot(hit.normal, ray.direction) < 0.0f)
+                    {
+                        hit.t = d;
+                    }
                 }
             }
         }
     }
 }
 
+void rngNextInt(inout uint state)
+{
+    // PCG random number generator
+    // Based on https://www.shadertoy.com/view/XlGcRh
+    uint oldState = state + 747796405u + 2891336453u;
+    uint word = ((oldState >> ((oldState >> 28u) + 4u)) ^ oldState) * 277803737u;
+    state = (word >> 22u) ^ word;
+}
+
+float rngNextFloat(inout uint state)
+{
+    rngNextInt(state);
+    return (float)state / (float)(0xffffffffu);
+}
+
+float rngInRange(float min, float max, inout uint state) {
+    return min + rngNextFloat(state) * (max - min);
+}
+
+float3 rngInSphere(inout uint state)
+{
+    float3 p = float3(0.0f, 0.0f, 0.0f);
+    do
+    {
+        p = 2.0f * float3(rngNextFloat(state), rngNextFloat(state), rngNextFloat(state)) - float3(1.0f, 1.0f, 1.0f);
+    } while (length(p * p) > 1.0f);
+
+    return p;
+}
+
 RayHit CastRayCWBVH(const Ray ray)
 {
-    RayHit hit = (RayHit) 0;
+    RayHit hit = (RayHit)0;
     hit.t = FarPlane;
 
     float3 invDir = rcp(ray.direction.xyz);
@@ -163,7 +210,8 @@ RayHit CastRayCWBVH(const Ray ray)
     {
         if (nodeGroup.y > 0x00FFFFFF)
         {
-            if (nodeGroup.y == 0x80000001) {
+            if (nodeGroup.y == 0x80000001)
+            {
                 nodeGroup.y -= 1;
             }
             count += 1;
@@ -226,37 +274,17 @@ RayHit CastRayCWBVH(const Ray ray)
     }
 
     hit.steps = count;
+
+    if (hit.t < FarPlane)
+    {
+        TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
+        hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+        hit.position = ray.origin + hit.t * ray.direction;
+        hit.material = MaterialBuffer[triAttr.materialIndex];
+        hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
+    }
     
     return hit;
-}
-
-float2 InterpolateAttribute(float2 barycentric, float2 attr0, float2 attr1, float2 attr2)
-{
-    return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
-}
-
-float3 InterpolateAttribute(float2 barycentric, float3 attr0, float3 attr1, float3 attr2)
-{
-    return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
-}
-
-float Random(float2 uv)
-{
-    float2 uv2 = uv + float2(CurrentSample, CurrentSample);
-    return frac(sin(dot(uv2, float2(12.9898, 78.233))) * 43758.5453);
-}
-
-float3 RandomVectorInSphere(float3 randSeed)
-{
-    float3 p = float3(0.0f, 0.0f, 0.0f);
-    do
-    {
-        // Since 'Random' function never returns a value that is = 1, subtracting by float3(1) does not make sence.
-        p = 2.0f * float3(Random(randSeed.xy), Random(randSeed.yz), Random(randSeed.zx)) - float3(0.9f, 0.9f, 0.9f);
-    }
-    while (length(p * p) > 1.0f);
-
-    return p;
 }
 
 float3 BackgroundColor(float3 rayDirection)
@@ -265,7 +293,62 @@ float3 BackgroundColor(float3 rayDirection)
     return (1.0f - yHeight) * float3(1.0f, 1.0f, 1.0f) + yHeight * float3(0.5f, 0.7f, 1.0f);
 }
 
-float3 PathTrace(Ray ray)
+bool ScatterLambertian(RayHit hit, inout Ray ray, inout float3 attenuation, inout uint rngSeed)
+{
+    ray.origin = hit.position + hit.normal * 0.001f;
+    ray.direction = normalize(ray.direction + rngInSphere(rngSeed));
+    attenuation = GetAlbedoColor(hit);
+    return true;
+}
+
+bool ScatterMetal(RayHit hit, inout Ray ray, inout float3 attenuation, inout uint rngSeed)
+{
+    ray.origin = hit.position + hit.normal * 0.001f;
+    float3 reflected = reflect(normalize(ray.direction), hit.normal);
+    float smoothness = 1.0f - hit.material.metalicSmoothness.g;
+    ray.direction = normalize(reflected + smoothness * rngInSphere(rngSeed));
+    attenuation = GetAlbedoColor(hit);
+
+    return dot(ray.direction, hit.normal) >= 0;
+}
+
+float reflectance(float cosine, float refractionIndex)
+{
+    // Use Schlick's approximation for reflectance.
+    float r0 = (1.0f - refractionIndex) / (1.0f + refractionIndex);
+    r0 *= r0;
+    return r0 + (1.0 - r0) * pow((1.0 - cosine), 5.0);
+}
+
+bool ScatterDielectric(RayHit hit, inout Ray ray, inout float3 attenuation, inout uint rngSeed)
+{
+    attenuation = (float3)1.0f;
+    //attenuation = GetAlbedoColor(hit);
+
+    float refractRatio = 1.0f / hit.material.ior;
+    float3 unitDirection = normalize(ray.direction);
+    
+    float cosTheta = dot(-unitDirection, hit.normal);
+    float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+    bool cannotRefract = (refractRatio * sinTheta) > 1.0f;
+
+    float rnd = rngNextFloat(rngSeed);
+
+    if (cannotRefract || reflectance(cosTheta, refractRatio) > rnd)
+    {
+        ray.direction = normalize(reflect(unitDirection, hit.normal));
+    }
+    else
+    {
+        ray.direction = normalize(refract(unitDirection, hit.normal, refractRatio));
+    }
+
+    ray.origin = hit.position + ray.direction * 0.001f;
+    
+    return true;
+}
+
+float3 PathTrace(Ray ray, inout uint rngSeed)
 {
     int rayBounces = RAY_BOUNCES;
 
@@ -276,18 +359,48 @@ float3 PathTrace(Ray ray)
         RayHit hit = CastRayCWBVH(ray);
         if (hit.t < FarPlane)
         {
-            TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
-            float3 position = ray.origin + hit.t * ray.direction;
-            float3 normal = InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2);
+            float3 attenuation = (float3)0;
 
-            float3 albedo = abs(normalize(normal));
-            //float3 albedo = float3(1.0f, 1.0f, 1.0f);
-            color *= albedo * 0.5f;
-            
-            ray.origin = position + normal * 0.001f;
-            ray.direction = position + normal + RandomVectorInSphere(normal);
-            ray.direction = ray.direction - position;
-            ray.direction = normalize(ray.direction);
+            if (hit.material.mode == 3)
+            {
+                if (!ScatterDielectric(hit, ray, attenuation, rngSeed))
+                {
+                    return color;
+                }
+            }
+            else
+            {
+                float metalic = hit.material.metalicSmoothness.r;
+                if (metalic > 0.0f)
+                {
+                    Ray lambertRay = {ray.origin, ray.direction};
+                    if (!ScatterMetal(hit, ray, attenuation, rngSeed))
+                    {
+                        return color;
+                    }
+                    if (metalic < 1.0f)
+                    {
+                        float3 lambert = (float3)0;
+                        if (!ScatterLambertian(hit, lambertRay, lambert, rngSeed))
+                        {
+                            return color;
+                        }
+
+                        ray.direction = lerp(ray.direction, lambertRay.direction, metalic);
+
+                        attenuation = lerp(attenuation, lambert, metalic);
+                    }
+                }
+                else 
+                {
+                    if (!ScatterLambertian(hit, ray, attenuation, rngSeed))
+                    {
+                        return color;
+                    }
+                }
+            }
+
+            color *= attenuation;           
             
             rayBounces--;
         }
@@ -324,7 +437,12 @@ void PathTracer(uint3 id : SV_DispatchThreadID)
     }
 
     const uint rayIndex = id.x;
-    float2 pixelCoords = float2(rayIndex % OutputWidth, rayIndex / OutputWidth);
+    const uint pixelX = rayIndex % OutputWidth;
+    const uint pixelY = rayIndex / OutputWidth;
+    float2 pixelCoords = float2(pixelX, pixelY);
+
+    uint pixelIndex = pixelY * OutputWidth + pixelX;
+    uint rngSeed = RNGStateBuffer[pixelIndex];
 
     float3 color = 0.0f;
     #if NUM_SAMPLES > 1
@@ -332,23 +450,24 @@ void PathTracer(uint3 id : SV_DispatchThreadID)
     #else
     const int sampleIndex = 1;
     #endif
-    {
-        #if NUM_SAMPLES == 1
-        float sampleX = 0.5;
-        #else
-        float sampleX = sampleIndex / (NUM_SAMPLES - 1.0f);
-        #endif
-        float2 randomSample = float2(Random(float2(pixelCoords.x + sampleX, pixelCoords.y)), Random(float2(pixelCoords.x, pixelCoords.y + (sampleIndex / 9.0))));
+    {       
+        float2 randomSample = float2(rngInRange(0.0, 1.0, rngSeed), rngInRange(0.0, 1.0, rngSeed));
+        
         float2 pixelCoordsSample = pixelCoords + randomSample;
+        
         Ray ray = GetScreenRay(pixelCoordsSample);
-        color += PathTrace(ray);
+
+        color += PathTrace(ray, rngSeed);
     }
+    #if NUM_SAMPLES > 1
     color /= (float)NUM_SAMPLES;
+    #endif
 
-    float4 currentColor = AccumulatedOutput[pixelCoords];
+    float3 currentColor = AccumulatedOutput[pixelCoords].rgb;
+    float3 accumilatedColor = (color + currentColor * CurrentSample) / (CurrentSample + 1.0f);
+    //float3 accumilatedColor = CurrentSample == 0 ? color : color + currentColor;
 
-    float4 accumilatedColor = (float4(color, 1.0f) + currentColor * CurrentSample) / (CurrentSample + 1.0f);
-    //float4 accumilatedColor = float4(color, 1.0f) + currentColor;
+    Output[pixelCoords] = float4(accumilatedColor, 1.0f);
 
-    Output[pixelCoords] = float4(accumilatedColor.rgb, 1.0f);
+    RNGStateBuffer[pixelIndex] = rngSeed;
 }

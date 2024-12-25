@@ -1,4 +1,4 @@
-Shader "PathTracer/Presentation"
+Shader "Hidden/PathTracer/Presentation"
 {
     Properties
     {
@@ -7,7 +7,8 @@ Shader "PathTracer/Presentation"
     }
 
     CGINCLUDE
-        #include "UnityCG.cginc"
+        #pragma target 4.5
+        #include "Common.cginc"
   
         struct Attributes
         {
@@ -34,10 +35,11 @@ Shader "PathTracer/Presentation"
 
         half4 FragBlit(Varyings i) : SV_Target
         {
-            //half4 col = half4(pow(tex2D(_MainTex, i.uv).rgb/* / (float)Samples*/, 1.0f/2.2f), 1.0f);
-            half4 col = half4(tex2D(_MainTex, i.uv).rgb/* / (float)Samples*/, 1.0f);
+            float3 color = tex2D(_MainTex, i.uv).rgb;
+            /*if (Samples > 1)
+                color = color / (float)Samples;*/
 
-            return col;
+            return half4(lottes(color), 1.0f);
         }
     ENDCG
 
@@ -48,10 +50,8 @@ Shader "PathTracer/Presentation"
         Pass
         {
             CGPROGRAM
-
                 #pragma vertex VertBlit
                 #pragma fragment FragBlit
-
             ENDCG
         }
     }

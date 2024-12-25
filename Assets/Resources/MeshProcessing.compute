@@ -15,6 +15,7 @@ uint VertexStride;
 uint PositionOffset;
 uint NormalOffset;
 uint UVOffset;
+uint MaterialIndex;
 
 uint TriangleCount; 
 uint OutputTriangleStart;
@@ -107,6 +108,8 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
         attr.uv1 = ReadVertexUV(vertIndices.y);
         attr.uv2 = ReadVertexUV(vertIndices.z);
     #endif
+
+    attr.materialIndex = MaterialIndex;
     
     TriangleAttributesBuffer[writeTriIndex] = attr;
 }

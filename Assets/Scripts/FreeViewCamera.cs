@@ -7,16 +7,18 @@ public class FreeViewCamera : MonoBehaviour
     public float rotationSpeed = 2.0f;
     public float momentumFactor = 0.1f;
 
-    private Vector3 currentVelocity;
-    private Vector3 targetVelocity;
-    private Raytracer rayTracer;
+    Vector3 currentVelocity;
+    Vector3 targetVelocity;
+    Raytracer rayTracer;
 
-    private void Start()
+    void Start()
     {
         rayTracer = GetComponent<Raytracer>();
     }
 
-    private void Update()
+    float minVelocity = 1.0f;
+
+    void Update()
     {
         // Camera rotation when the right mouse button is held down
         if (Input.GetMouseButton(1))
@@ -48,7 +50,9 @@ public class FreeViewCamera : MonoBehaviour
         targetVelocity = movementDirection.normalized * (movementSpeed * speedModifier);
         currentVelocity = Vector3.Lerp(currentVelocity, targetVelocity, momentumFactor);
 
-        if (currentVelocity != Vector3.zero)
+        float currentSpeed = currentVelocity.magnitude;
+
+        if (currentSpeed > minVelocity)
         {
             if (rayTracer != null)
             {
