@@ -9,11 +9,11 @@ public class FreeViewCamera : MonoBehaviour
 
     Vector3 currentVelocity;
     Vector3 targetVelocity;
-    Raytracer rayTracer;
+    PathTracer pathTracer;
 
     void Start()
     {
-        rayTracer = GetComponent<Raytracer>();
+        pathTracer = GetComponent<PathTracer>();
     }
 
     float minVelocity = 1.0f;
@@ -28,9 +28,9 @@ public class FreeViewCamera : MonoBehaviour
 
             transform.Rotate(-mouseY, mouseX, 0);
             transform.eulerAngles = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, 0);
-            if (rayTracer != null)
+            if (pathTracer != null)
             {
-                rayTracer.ResetSamples();
+                pathTracer.ResetSamples();
             }
         }
 
@@ -54,9 +54,9 @@ public class FreeViewCamera : MonoBehaviour
 
         if (currentSpeed > minVelocity)
         {
-            if (rayTracer != null)
+            if (pathTracer != null)
             {
-                rayTracer.ResetSamples();
+                pathTracer.ResetSamples();
             }
             transform.position += currentVelocity * Time.deltaTime;
         }

@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
-//using System.Threading;
+using System.Threading;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-public class BVHScene : MonoBehaviour
+public class BVHScene
 {
     MeshRenderer[] meshRenderers;
     ComputeShader meshProcessingShader;
@@ -37,7 +37,7 @@ public class BVHScene : MonoBehaviour
     const int BVHNodeSize = 80;
     const int BVHTriSize = 16;
 
-    void Start()
+    public void Start()
     {
         sceneBVH = new tinybvh.BVH();
 
@@ -49,12 +49,12 @@ public class BVHScene : MonoBehaviour
         hasUVsKeyword = meshProcessingShader.keywordSpace.FindKeyword("HAS_UVS");
 
         // Populate list of mesh renderers to trace against
-        meshRenderers = FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+        meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
 
         ProcessMeshes();
     }
 
-    void OnDestroy()
+    public void OnDestroy()
     {
         vertexPositionBufferGPU?.Release();
         triangleAttributesBuffer?.Release();
@@ -70,6 +70,57 @@ public class BVHScene : MonoBehaviour
     public tinybvh.BVH GetBVH()
     {
         return sceneBVH;
+    }
+
+    public void Update()
+    {
+        if (buildingBVH && sceneBVH.IsReady())
+        {
+            Debug.Log("BVH Uploaded");
+            // Get the sizes of the arrays
+            int nodesSize = sceneBVH.GetCWBVHNodesSize();
+            int trisSize = sceneBVH.GetCWBVHTrisSize();
+
+            IntPtr nodesPtr, trisPtr;
+            if (sceneBVH.GetCWBVHData(out nodesPtr, out trisPtr))
+            {
+                Utilities.UploadFromPointer(ref bvhNodes, nodesPtr, nodesSize, BVHNodeSize);
+                Utilities.UploadFromPointer(ref bvhTris, trisPtr, trisSize, BVHTriSize);
+            } 
+            else
+            {
+                Debug.LogError("Failed to fetch updated BVH data.");
+            }
+
+            buildingBVH = false;
+        }
+    }
+
+    public bool CanRender()
+    {
+        return (bvhNodes != null && bvhTris != null);
+    }
+
+    public void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
+    {
+        if (bvhNodes == null || bvhTris == null || triangleAttributesBuffer == null)
+        {
+            return;
+        }
+
+        cmd.SetComputeBufferParam(shader, kernelIndex, "BVHNodes", bvhNodes);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "BVHTris", bvhTris);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "TriangleAttributesBuffer", triangleAttributesBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "MaterialBuffer", materialsBuffer);
+        
+        for (int i = 0; i < textures.Count; i++)
+        {
+            cmd.SetComputeTextureParam(shader, 0, $"AlbedoTexture{i + 1}", textures[i]);
+        }
+        for (int i = textures.Count; i < 8; i++)
+        {
+            cmd.SetComputeTextureParam(shader, 0, $"AlbedoTexture{i + 1}", Texture2D.whiteTexture);
+        }
     }
 
     void ProcessMeshes()
@@ -158,6 +209,8 @@ public class BVHScene : MonoBehaviour
         materialsBuffer = new ComputeBuffer(materials.Count, 32);
         textures.Clear();
 
+        Debug.Log("Total materials: " + materials.Count);
+
         float[] materialData = new float[materials.Count * 8];
         for (int i = 0; i < materials.Count; i++)
         {
@@ -192,6 +245,8 @@ public class BVHScene : MonoBehaviour
         }
         materialsBuffer.SetData(materialData);
 
+        Debug.Log("Total Textures: " + textures.Count);
+
         // Initiate async readback of vertex buffer to pass to tinybvh to build
         readbackStartTime = DateTime.UtcNow;
         AsyncGPUReadback.RequestIntoNativeArray(ref vertexPositionBufferCPU, vertexPositionBufferGPU, OnCompleteReadback);
@@ -219,8 +274,10 @@ public class BVHScene : MonoBehaviour
         #endif
         
         // Build BVH in thread.
-        //Thread thread = new Thread(() =>
+        #if !PLATFORM_WEBGL
+        Thread thread = new Thread(() =>
         {
+        #endif
             DateTime bvhStartTime = DateTime.UtcNow;
             sceneBVH.Build(dataPointer, totalTriangleCount, true);
             TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
@@ -230,61 +287,13 @@ public class BVHScene : MonoBehaviour
             #if UNITY_EDITOR
                 persistentBuffer.Dispose();
             #endif
-        };//);
+        #if !PLATFORM_WEBGL
+        });
+        #endif
 
         buildingBVH = true;
-        //thread.Start();
-    }
-
-    void Update()
-    {
-        if (buildingBVH && sceneBVH.IsReady())
-        {
-            Debug.Log("BVH Uploaded");
-            // Get the sizes of the arrays
-            int nodesSize = sceneBVH.GetCWBVHNodesSize();
-            int trisSize = sceneBVH.GetCWBVHTrisSize();
-
-            IntPtr nodesPtr, trisPtr;
-            if (sceneBVH.GetCWBVHData(out nodesPtr, out trisPtr))
-            {
-                Utilities.UploadFromPointer(ref bvhNodes, nodesPtr, nodesSize, BVHNodeSize);
-                Utilities.UploadFromPointer(ref bvhTris, trisPtr, trisSize, BVHTriSize);
-            } 
-            else
-            {
-                Debug.LogError("Failed to fetch updated BVH data.");
-            }
-
-            buildingBVH = false;
-        }
-    }
-
-    public bool CanRender()
-    {
-        return (bvhNodes != null && bvhTris != null);
-    }
-
-    public void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
-    {
-        if (bvhNodes == null || bvhTris == null || triangleAttributesBuffer == null)
-        {
-            return;
-        }
-
-        cmd.SetComputeBufferParam(shader, kernelIndex, "BVHNodes", bvhNodes);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "BVHTris", bvhTris);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "TriangleAttributesBuffer", triangleAttributesBuffer);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "MaterialBuffer", materialsBuffer);
-        
-        cmd.SetComputeIntParam(shader, "AlbedoTextureCount", textures.Count);
-        for (int i = 0; i < textures.Count; i++)
-        {
-            cmd.SetComputeTextureParam(shader, 0, $"AlbedoTexture{i + 1}", textures[i]);
-        }
-        for (int i = textures.Count; i < 8; i++)
-        {
-            cmd.SetComputeTextureParam(shader, 0, $"AlbedoTexture{i + 1}", Texture2D.whiteTexture);
-        }
+        #if !PLATFORM_WEBGL
+        thread.Start();
+        #endif
     }
 }

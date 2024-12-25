@@ -1,6 +1,8 @@
 #ifndef __UNITY_PATHTRACER_COMMON__
 #define __UNITY_PATHTRACER_COMMON__
 
+#define PI 3.14159265359f
+
 uint TotalRays;
 uint CurrentSample;
 float FarPlane;

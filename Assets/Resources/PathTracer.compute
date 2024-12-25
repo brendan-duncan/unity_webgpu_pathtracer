@@ -70,8 +70,23 @@ float3 PathTrace(Ray ray, inout uint rngSeed)
         }
         else
         {
-            color *= BackgroundColor(ray.direction);
+            float3 v = ray.direction;
+            float3 s = skyState[0].sunDirection;
+
+            float theta = acos(v.y);
+            float gamma = acos(clamp(dot(v, s), -1.0, 1.0));
+
+            float3 radiance = float3(
+                skyRadiance(theta, gamma, 0),
+                skyRadiance(theta, gamma, 1),
+                skyRadiance(theta, gamma, 2)
+            );
+
+            color *= radiance * 0.05f;
             return color;
+
+            //color *= BackgroundColor(ray.direction);
+            //return color;
         }
     }
 

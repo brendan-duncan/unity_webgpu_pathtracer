@@ -22,6 +22,8 @@ StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;
 StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
+bool BackfaceCulling;
+
 // Stack size for BVH traversal
 #define BHV_STACK_SIZE 32
 
@@ -149,12 +151,19 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
                     hit.barycentric = float2(u, v);
                     hit.triIndex = asuint(BVHTris[triAddr].w);
 
-                    TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
-                    hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
-                    // Skip the back face of the triangle
-                    if (dot(hit.normal, ray.direction) < 0.0f)
+                    if (!BackfaceCulling)
                     {
                         hit.t = d;
+                    }
+                    else
+                    {
+                        TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
+                        hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+                        // Skip the back face of the triangle
+                        if (dot(hit.normal, ray.direction) < 0.0f)
+                        {
+                            hit.t = d;
+                        }
                     }
                 }
             }

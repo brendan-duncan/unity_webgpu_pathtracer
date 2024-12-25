@@ -3,8 +3,11 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 [RequireComponent(typeof(Camera))]
-public class Raytracer : MonoBehaviour
+public class PathTracer : MonoBehaviour
 {
+    public bool backfaceCulling = true;
+    public float skyTurbidity = 1.0f;
+
     Camera sourceCamera;
     BVHScene bvhScene;
     CommandBuffer cmd;
@@ -16,7 +19,11 @@ public class Raytracer : MonoBehaviour
     int outputHeight;
     int totalRays;
     RenderTexture[] outputRT = { null, null };
-    ComputeBuffer rngStateBuffer = null;
+    ComputeBuffer rngStateBuffer;
+
+    ComputeBuffer skyStateBuffer;
+    SkyState skyState;
+    
     int currentRT = 0;
     int currentSample = 0;
 
@@ -31,19 +38,74 @@ public class Raytracer : MonoBehaviour
     void Start()
     {
         sourceCamera = GetComponent<Camera>();
-        bvhScene = FindFirstObjectByType<BVHScene>();
+
+        bvhScene = new BVHScene();
         cmd = new CommandBuffer();
 
-        if (bvhScene == null)
-        {
-            Debug.LogError("BVHManager was not found in the scene!");
-        }
+        bvhScene.Start();
 
         pathTracerShader = Resources.Load<ComputeShader>("PathTracer");
         Shader presentationShader = Resources.Load<Shader>("Presentation");
         presentationMaterial = new Material(presentationShader);
 
-        // Find the directional light in the scene for NDotL
+        bool hasLight = false;
+
+        Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+        foreach (Light light in lights)
+        {
+            if (light.type == LightType.Directional)
+            {
+                lightDirection = -light.transform.forward;
+                lightColor = light.color * light.intensity;
+                hasLight = true;
+                break;
+            }
+        }
+
+        skyStateBuffer = new ComputeBuffer(40, 4);
+        skyState = new SkyState();
+        float[] direction = { lightDirection.x, lightDirection.y, lightDirection.z };
+        float[] color = { 0.3f, 0.2f, 0.1f };
+
+        skyState.Init(direction, color, skyTurbidity);
+        skyState.UpdateBuffer(skyStateBuffer);
+    }
+
+    void OnDestroy()
+    {
+        bvhScene?.OnDestroy();
+        bvhScene = null;
+        rngStateBuffer?.Release();
+        outputRT[0]?.Release();
+        outputRT[1]?.Release();
+        cmd?.Release();
+    }
+
+    void Update()
+    {
+        bvhScene.Update();
+    }
+
+    public void ResetSamples()
+    {
+        currentSample = 0;
+    }
+
+    void OnRenderImage(RenderTexture source, RenderTexture destination)
+    {
+        if (!bvhScene.CanRender())
+        {
+            Graphics.Blit(source, destination);
+            return;
+        }
+
+        outputWidth = sourceCamera.scaledPixelWidth;
+        outputHeight = sourceCamera.scaledPixelHeight;
+        totalRays = outputWidth * outputHeight;
+        int dispatchX = Mathf.CeilToInt(totalRays / 256.0f);
+
+
+        Vector3 lastDirection = lightDirection;
         Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
         foreach (Light light in lights)
         {
@@ -54,33 +116,13 @@ public class Raytracer : MonoBehaviour
                 break;
             }
         }
-    }
 
-    void OnDestroy()
-    {
-        rngStateBuffer?.Release();
-        outputRT[0]?.Release();
-        outputRT[1]?.Release();
-        cmd?.Release();
-    }
-
-    public void ResetSamples()
-    {
-        currentSample = 0;
-    }
-
-    void OnRenderImage(RenderTexture source, RenderTexture destination)
-    {
-        if (bvhScene == null || !bvhScene.CanRender())
+        if ((lastDirection - lightDirection).sqrMagnitude > 0.0001f)
         {
-            Graphics.Blit(source, destination);
-            return;
+            skyState.Init(new float[] { lightDirection.x, lightDirection.y, lightDirection.z }, new float[] { 0.3f, 0.2f, 0.1f }, skyTurbidity);
+            skyState.UpdateBuffer(skyStateBuffer);
+            ResetSamples();
         }
-
-        outputWidth = sourceCamera.scaledPixelWidth;
-        outputHeight = sourceCamera.scaledPixelHeight;
-        totalRays = outputWidth * outputHeight;
-        int dispatchX = Mathf.CeilToInt(totalRays / 256.0f);
 
         // Prepare buffers and output texture
         if (Utilities.PrepareRenderTexture(ref outputRT[0], outputWidth, outputHeight, RenderTextureFormat.ARGBFloat))
@@ -137,6 +179,7 @@ public class Raytracer : MonoBehaviour
 
     void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
     {
+        cmd.SetComputeIntParam(shader, "BackfaceCulling", backfaceCulling ? 1 : 0);
         cmd.SetComputeVectorParam(shader, "LightDirection", lightDirection);
         cmd.SetComputeVectorParam(shader, "LightColor", lightColor);
         cmd.SetComputeFloatParam(shader, "FarPlane", sourceCamera.farClipPlane);
@@ -147,5 +190,6 @@ public class Raytracer : MonoBehaviour
         cmd.SetComputeTextureParam(shader, kernelIndex, "Output", outputRT[currentRT]);
         cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", outputRT[1 - currentRT]);
         cmd.SetComputeBufferParam(shader, 0, "RNGStateBuffer", rngStateBuffer);
+        cmd.SetComputeBufferParam(shader, 0, "skyState", skyStateBuffer);
     }
 }

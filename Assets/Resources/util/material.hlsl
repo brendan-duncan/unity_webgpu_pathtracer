@@ -46,7 +46,6 @@ float3 GetAlbedoColor(Material material, float2 uv)
         case 5: return AlbedoTexture6.SampleLevel(samplerAlbedoTexture6, uv, 0).rgb;
         case 6: return AlbedoTexture7.SampleLevel(samplerAlbedoTexture7, uv, 0).rgb;
         case 7: return AlbedoTexture8.SampleLevel(samplerAlbedoTexture8, uv, 0).rgb;
-        default: return AlbedoTexture1.SampleLevel(samplerAlbedoTexture1, uv, 0).rgb;
     }
 
     return material.albedo.rgb;
