@@ -1,0 +1,24 @@
+#ifndef __UNITY_PATHTRACER_RAY_HLSL__
+#define __UNITY_PATHTRACER_RAY_HLSL__
+
+#include "material.hlsl"
+
+struct Ray
+{
+    float3 origin;
+    float3 direction;
+};
+
+struct RayHit
+{
+    float t;
+    float2 barycentric;
+    uint triIndex;
+    uint steps;
+    float3 position;
+    float3 normal;
+    float2 uv;
+    Material material;
+};
+
+#endif // __UNITY_PATHTRACER_RAY_HLSL__

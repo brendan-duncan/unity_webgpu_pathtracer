@@ -4,7 +4,7 @@
 #pragma multi_compile __ HAS_UVS
 #pragma kernel ProcessMesh
 
-#include "Common.cginc"
+#include "util/triangle_attributes.hlsl"
 
 ByteAddressBuffer VertexBuffer;
 #if HAS_INDEX_BUFFER
@@ -22,6 +22,7 @@ uint OutputTriangleStart;
 float4x4 LocalToWorld;
 
 RWStructuredBuffer<float4> VertexPositionBuffer;
+RWStructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
 float3 ReadVertexPosition(uint vertexIndex)
 {

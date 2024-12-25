@@ -8,7 +8,7 @@ Shader "Hidden/PathTracer/Presentation"
 
     CGINCLUDE
         #pragma target 4.5
-        #include "Common.cginc"
+        #include "util/tonemap.hlsl"
   
         struct Attributes
         {
@@ -36,9 +36,6 @@ Shader "Hidden/PathTracer/Presentation"
         half4 FragBlit(Varyings i) : SV_Target
         {
             float3 color = tex2D(_MainTex, i.uv).rgb;
-            /*if (Samples > 1)
-                color = color / (float)Samples;*/
-
             return half4(lottes(color), 1.0f);
         }
     ENDCG
