@@ -30,15 +30,6 @@ float3 TraceRay(Ray ray, inout uint rngSeed)
         bool didHit = hit.t < FarPlane;
         if (didHit)
         {
-            /*float2 u = float2(rngInRange(0.0, 1.0, rngSeed), rngInRange(0.0, 1.0, rngSeed));
-            float3 lightDirection = SampleSolarDiskDirection(u, SOLAR_COS_THETA_MAX, SkyStateBuffer[0].sunDirection);
-            float3 lightIntensity = float3(
-                SkyStateBuffer[0].solarRadiances[0],
-                SkyStateBuffer[0].solarRadiances[1],
-                SkyStateBuffer[0].solarRadiances[2]);
-            Ray lightRay = {ray.origin + ray.direction * hit.t, lightDirection};
-            bool lightVisibility = ShadowRay(lightRay, FarPlane);*/
-
             float3 attenuation = (float3)0;
             if (hit.material.mode == 3)
             {
@@ -79,8 +70,6 @@ float3 TraceRay(Ray ray, inout uint rngSeed)
                 }
             }
 
-            //radiance += lightIntensity * lightVisibility * SOLAR_INV_PDF;
-            //radiance += attenuation;
             color *= attenuation;
             
             rayBounces--;

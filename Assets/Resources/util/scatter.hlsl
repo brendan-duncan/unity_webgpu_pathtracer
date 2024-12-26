@@ -3,7 +3,7 @@
 
 bool ScatterLambertian(RayHit hit, inout Ray ray, inout float3 attenuation, inout uint rngSeed)
 {
-    ray.origin = hit.position + hit.normal * 0.001f;
+    ray.origin = hit.position;
     ray.direction = normalize(ray.direction + rngInSphere(rngSeed));
     attenuation = GetAlbedoColor(hit.material, hit.uv);
     return true;
@@ -11,7 +11,7 @@ bool ScatterLambertian(RayHit hit, inout Ray ray, inout float3 attenuation, inou
 
 bool ScatterMetal(RayHit hit, inout Ray ray, inout float3 attenuation, inout uint rngSeed)
 {
-    ray.origin = hit.position + hit.normal * 0.001f;
+    ray.origin = hit.position;
     float3 reflected = reflect(normalize(ray.direction), hit.normal);
     float smoothness = 1.0f - hit.material.metalicSmoothness.g;
     ray.direction = normalize(reflected + smoothness * rngInSphere(rngSeed));
@@ -51,7 +51,7 @@ bool ScatterDielectric(RayHit hit, inout Ray ray, inout float3 attenuation, inou
         ray.direction = normalize(refract(unitDirection, hit.normal, refractRatio));
     }
 
-    ray.origin = hit.position + ray.direction * 0.001f;
+    ray.origin = hit.position;
     
     return true;
 }

@@ -109,6 +109,11 @@ public class BVHScene
         return (bvhNodes != null && bvhTris != null);
     }
 
+    public bool HasTextures()
+    {
+        return textureDataBuffer != null;
+    }
+
     public void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
     {
         if (bvhNodes == null || bvhTris == null || triangleAttributesBuffer == null)
@@ -120,17 +125,12 @@ public class BVHScene
         cmd.SetComputeBufferParam(shader, kernelIndex, "BVHTris", bvhTris);
         cmd.SetComputeBufferParam(shader, kernelIndex, "TriangleAttributesBuffer", triangleAttributesBuffer);
         cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", materialsBuffer);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "TextureDescriptors", textureDescriptorBuffer);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "TextureData", textureDataBuffer);
-        
-        /*for (int i = 0; i < textures.Count; i++)
+
+        if (textureDataBuffer != null)
         {
-            cmd.SetComputeTextureParam(shader, 0, $"AlbedoTexture{i + 1}", textures[i]);
+            cmd.SetComputeBufferParam(shader, kernelIndex, "TextureDescriptors", textureDescriptorBuffer);
+            cmd.SetComputeBufferParam(shader, kernelIndex, "TextureData", textureDataBuffer);
         }
-        for (int i = textures.Count; i < 8; i++)
-        {
-            cmd.SetComputeTextureParam(shader, 0, $"AlbedoTexture{i + 1}", Texture2D.whiteTexture);
-        }*/
     }
 
     void ProcessMeshes()
@@ -293,44 +293,54 @@ public class BVHScene
             totalTextureSize += textureSize;
         }
 
-        textureDataBuffer = new ComputeBuffer(totalTextureSize, 4*4);
-        textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
-
-        textureCopyShader.SetBuffer(0, "TextureData", textureDataBuffer);
-
-        uint[] textureDescriptorData = new uint[textures.Count * 4];
-        int ti = 0;
-        int textureOffset = 0;
-        int textureIndex = 0;
-        foreach (Texture texture in textures)
+        if (totalTextureSize > 0)
         {
-            int width = texture.width;
-            int height = texture.height;
-            int totalPixels = width * height;
-            int textureSize = totalPixels;
+            textureDataBuffer = new ComputeBuffer(totalTextureSize, 4*4);
+            textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
 
-            Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureOffset + " " + (textureSize * 16) + " bytes");
-            textureIndex++;
+            textureCopyShader.SetBuffer(0, "TextureData", textureDataBuffer);
 
-            textureDescriptorData[ti++] = (uint)width;
-            textureDescriptorData[ti++] = (uint)height;
-            textureDescriptorData[ti++] = (uint)textureOffset;
-            textureDescriptorData[ti++] = (uint)0;
+            uint[] textureDescriptorData = new uint[textures.Count * 4];
+            int ti = 0;
+            int textureOffset = 0;
+            int textureIndex = 0;
+            foreach (Texture texture in textures)
+            {
+                int width = texture.width;
+                int height = texture.height;
+                int totalPixels = width * height;
+                int textureSize = totalPixels;
+
+                Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureOffset + " " + (textureSize * 16) + " bytes");
+                textureIndex++;
+
+                textureDescriptorData[ti++] = (uint)width;
+                textureDescriptorData[ti++] = (uint)height;
+                textureDescriptorData[ti++] = (uint)textureOffset;
+                textureDescriptorData[ti++] = (uint)0;
+                
+                textureCopyShader.SetTexture(0, "Texture", texture);
+                textureCopyShader.SetInt("TextureWidth", width);
+                textureCopyShader.SetInt("TextureHeight", height);
+                textureCopyShader.SetInt("Offset", textureOffset);
+
+                int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
+                textureCopyShader.Dispatch(0, dispatchX, 1, 1);
+
+                textureOffset += textureSize;
+            }
             
-            textureCopyShader.SetTexture(0, "Texture", texture);
-            textureCopyShader.SetInt("TextureWidth", width);
-            textureCopyShader.SetInt("TextureHeight", height);
-            textureCopyShader.SetInt("Offset", textureOffset);
+            textureDescriptorBuffer.SetData(textureDescriptorData);
 
-            int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
-            textureCopyShader.Dispatch(0, dispatchX, 1, 1);
-
-            textureOffset += textureSize;
+            Debug.Log("Total texture data size: " + totalTextureSize * 16 + " bytes");
         }
-        
-        textureDescriptorBuffer.SetData(textureDescriptorData);
-
-        Debug.Log("Total texture data size: " + totalTextureSize * 16 + " bytes");
+        else
+        {
+            textureDataBuffer?.Release();
+            textureDescriptorBuffer?.Release();
+            textureDataBuffer = null;
+            textureDescriptorBuffer = null;
+        }
 
         // Initiate async readback of vertex buffer to pass to tinybvh to build
         readbackStartTime = DateTime.UtcNow;

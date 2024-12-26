@@ -1,6 +1,8 @@
 #ifndef __UNITY_PATHTRACER_MATERIAL_HLSL__
 #define __UNITY_PATHTRACER_MATERIAL_HLSL__
 
+#pragma multi_compile __ HAS_TEXTURES
+
 struct Material
 {
     float4 albedo;
@@ -17,11 +19,15 @@ struct TextureDescriptor
     uint offset;
     uint padding;
 };
+
+#if HAS_TEXTURES
 StructuredBuffer<TextureDescriptor> TextureDescriptors;
 StructuredBuffer<float4> TextureData;
+#endif
 
 float3 GetAlbedoColor(Material material, float2 uv)
 {
+#if HAS_TEXTURES
     if (material.albedo.a < 0.0f)
     {
         return material.albedo.rgb;
@@ -46,6 +52,9 @@ float3 GetAlbedoColor(Material material, float2 uv)
 
     return float3(r / 255.0f, g / 255.0f, b / 255.0f);*/
     //return material.albedo.rgb;
+#else
+    return material.albedo.rgb;
+#endif
 }
 
 #endif // __UNITY_PATHTRACER_MATERIAL_HLSL__

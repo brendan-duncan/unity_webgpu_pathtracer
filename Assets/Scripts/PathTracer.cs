@@ -24,7 +24,8 @@ public class PathTracer : MonoBehaviour
     public SkyMode skyMode = SkyMode.Basic;
     public float exposureStops = 2.0f;
     public TonemapMode tonemapMode = TonemapMode.Lottes;
-    
+
+    LocalKeyword hasTexturesKeyword;        
 
     Camera sourceCamera;
     BVHScene bvhScene;
@@ -66,6 +67,8 @@ public class PathTracer : MonoBehaviour
         Shader presentationShader = Resources.Load<Shader>("Presentation");
         presentationMaterial = new Material(presentationShader);
 
+        hasTexturesKeyword = pathTracerShader.keywordSpace.FindKeyword("HAS_TEXTURES");
+
         bool hasLight = false;
 
         Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
@@ -103,6 +106,7 @@ public class PathTracer : MonoBehaviour
     void Update()
     {
         bvhScene.Update();
+        pathTracerShader.SetKeyword(hasTexturesKeyword, bvhScene.HasTextures());
     }
 
     public void ResetSamples()
