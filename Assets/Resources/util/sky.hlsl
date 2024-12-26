@@ -3,6 +3,12 @@
 
 #include "common.hlsl"
 
+int SkyMode;
+
+#define TERRESTRIAL_SOLAR_RADIUS (0.255f * DEGREES_TO_RADIANS)
+#define SOLAR_COS_THETA_MAX cos(TERRESTRIAL_SOLAR_RADIUS)
+#define SOLAR_INV_PDF (2.0f * PI * (1.0f - SOLAR_COS_THETA_MAX))
+
 float3 BackgroundColor(float3 rayDirection)
 {
     float yHeight = 0.5f * (-rayDirection.y + 1.0f);
@@ -18,9 +24,9 @@ struct SkyState
     float3 sunDirection;
 };
 
-StructuredBuffer<SkyState> skyState;
+StructuredBuffer<SkyState> SkyStateBuffer;
 
-float3x3 pixarOnb(float3 n)
+float3x3 PixarOnb(float3 n)
 {
     // https://www.jcgt.org/published/0006/01/01/paper-lowres.pdf
     float s = n.z >= 0.0f ? -1.0f : 1.0f;
@@ -33,7 +39,7 @@ float3x3 pixarOnb(float3 n)
 }
 
 // `u` is a random number in [0, 1].
-float3 directionInCone(float2 u, float cosThetaMax)
+float3 DirectionInCone(float2 u, float cosThetaMax)
 {
     float cosTheta = 1.0f - u.x * (1.0f - cosThetaMax);
     float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
@@ -46,26 +52,27 @@ float3 directionInCone(float2 u, float cosThetaMax)
     return float3(x, y, z);
 }
 
-float3 sampleSolarDiskDirection(float2 u, float cosThetaMax, float3 sunDirection)
+float3 SampleSolarDiskDirection(float2 u, float cosThetaMax, float3 sunDirection)
 {
-    float3 v = directionInCone(u, cosThetaMax);
-    float3x3 onb = pixarOnb(sunDirection);
+    float3 v = DirectionInCone(u, cosThetaMax);
+    float3x3 onb = PixarOnb(sunDirection);
     float3 res = mul(onb, v);
     return res;
 }
 
-float skyRadiance(float theta, float gamma, uint channel)  {
-    float r = skyState[0].skyRadiances[channel];
+float SkyRadiance(float theta, float gamma, uint channel)  {
+    SkyState skyState = SkyStateBuffer[0];
+    float r = skyState.skyRadiances[channel];
     uint idx = 9u * channel;
-    float p0 = skyState[0].params[idx + 0u];
-    float p1 = skyState[0].params[idx + 1u];
-    float p2 = skyState[0].params[idx + 2u];
-    float p3 = skyState[0].params[idx + 3u];
-    float p4 = skyState[0].params[idx + 4u];
-    float p5 = skyState[0].params[idx + 5u];
-    float p6 = skyState[0].params[idx + 6u];
-    float p7 = skyState[0].params[idx + 7u];
-    float p8 = skyState[0].params[idx + 8u];
+    float p0 = skyState.params[idx + 0u];
+    float p1 = skyState.params[idx + 1u];
+    float p2 = skyState.params[idx + 2u];
+    float p3 = skyState.params[idx + 3u];
+    float p4 = skyState.params[idx + 4u];
+    float p5 = skyState.params[idx + 5u];
+    float p6 = skyState.params[idx + 6u];
+    float p7 = skyState.params[idx + 7u];
+    float p8 = skyState.params[idx + 8u];
 
     float cosGamma = cos(gamma);
     float cosGamma2 = cosGamma * cosGamma;

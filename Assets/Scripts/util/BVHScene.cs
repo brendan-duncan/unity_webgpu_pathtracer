@@ -23,7 +23,11 @@ public class BVHScene
     public NativeArray<Vector4> vertexPositionBufferCPU;
     ComputeBuffer triangleAttributesBuffer;
     ComputeBuffer materialsBuffer;
+
+    ComputeShader textureCopyShader;
     List<Texture> textures = new List<Texture>();
+    ComputeBuffer textureDescriptorBuffer;
+    ComputeBuffer textureDataBuffer;
 
     // BVH data
     tinybvh.BVH sceneBVH;
@@ -48,8 +52,7 @@ public class BVHScene
         hasNormalsKeyword = meshProcessingShader.keywordSpace.FindKeyword("HAS_NORMALS");
         hasUVsKeyword = meshProcessingShader.keywordSpace.FindKeyword("HAS_UVS");
 
-        // Populate list of mesh renderers to trace against
-        meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+        textureCopyShader = Resources.Load<ComputeShader>("CopyTextureData");
 
         ProcessMeshes();
     }
@@ -65,6 +68,11 @@ public class BVHScene
         }
 
         sceneBVH.Destroy();
+        bvhNodes?.Release();
+        bvhTris?.Release();
+        materialsBuffer?.Release();
+        textureDescriptorBuffer?.Release();
+        textureDataBuffer?.Release();
     }
 
     public tinybvh.BVH GetBVH()
@@ -111,22 +119,27 @@ public class BVHScene
         cmd.SetComputeBufferParam(shader, kernelIndex, "BVHNodes", bvhNodes);
         cmd.SetComputeBufferParam(shader, kernelIndex, "BVHTris", bvhTris);
         cmd.SetComputeBufferParam(shader, kernelIndex, "TriangleAttributesBuffer", triangleAttributesBuffer);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "MaterialBuffer", materialsBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", materialsBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "TextureDescriptors", textureDescriptorBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "TextureData", textureDataBuffer);
         
-        for (int i = 0; i < textures.Count; i++)
+        /*for (int i = 0; i < textures.Count; i++)
         {
             cmd.SetComputeTextureParam(shader, 0, $"AlbedoTexture{i + 1}", textures[i]);
         }
         for (int i = textures.Count; i < 8; i++)
         {
             cmd.SetComputeTextureParam(shader, 0, $"AlbedoTexture{i + 1}", Texture2D.whiteTexture);
-        }
+        }*/
     }
 
     void ProcessMeshes()
     {
         totalVertexCount = 0;
         totalTriangleCount = 0;
+
+        // Populate list of mesh renderers to trace against
+        meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
 
         // Gather info on the meshes we'll be using
         foreach (MeshRenderer renderer in meshRenderers)
@@ -138,6 +151,12 @@ public class BVHScene
             }
 
             totalVertexCount += Utilities.GetTriangleCount(mesh) * 3;
+        }
+
+        if (totalVertexCount == 0)
+        {
+            Debug.LogError("No meshes found to process.");
+            return;
         }
 
         // Allocate buffers
@@ -214,11 +233,27 @@ public class BVHScene
         float[] materialData = new float[materials.Count * 8];
         for (int i = 0; i < materials.Count; i++)
         {
-            Color emission = materials[i].GetColor("_EmissionColor");
-            Color color = materials[i].color + emission;
-            float metalic = materials[i].GetFloat("_Metallic");
-            float smoothness = materials[i].GetFloat("_Glossiness");
-            int mode = materials[i].GetInt("_Mode");
+            Color color = 
+                materials[i].HasProperty("_Color") ? materials[i].color
+                : materials[i].HasProperty("baseColorFactor") ? materials[i].GetColor("baseColorFactor")
+                : new Color(0.8f, 0.8f, 0.8f, 1.0f);
+            Color emission = 
+                materials[i].HasProperty("_EmissionColor") ? materials[i].GetColor("_EmissionColor")
+                : materials[i].HasProperty("emissionFactor") ? materials[i].GetColor("emissionFactor")
+                : Color.black;
+            color += emission;
+            float metalic = 
+                materials[i].HasProperty("_Metallic") ? materials[i].GetFloat("_Metallic")
+                : materials[i].HasProperty("metallicFactor") ? materials[i].GetFloat("metallicFactor")
+                : 0.0f;
+            float smoothness =
+                materials[i].HasProperty("_Glossiness") ? materials[i].GetFloat("_Glossiness")
+                : materials[i].HasProperty("roughnessFactor") ? 1.0f - materials[i].GetFloat("roughnessFactor")
+                : 0.0f;
+            int mode = 
+                materials[i].HasProperty("_Mode") ? materials[i].GetInt("_Mode")
+                : materials[i].HasProperty("mode") ? materials[i].GetInt("mode")
+                : 0;
             materialData[i * 8 + 0] = color.r;
             materialData[i * 8 + 1] = color.g;
             materialData[i * 8 + 2] = color.b;
@@ -228,7 +263,9 @@ public class BVHScene
             materialData[i * 8 + 6] = (float)mode;
             materialData[i * 8 + 7] = 1.3f;
 
-            Texture mainTex = materials[i].GetTexture("_MainTex");
+            Texture mainTex = materials[i].HasProperty("_MainTex") ? materials[i].GetTexture("_MainTex")
+                : materials[i].HasProperty("baseColorTexture") ? materials[i].GetTexture("baseColorTexture")
+                : null;
 
             if (mainTex)
             {
@@ -239,13 +276,61 @@ public class BVHScene
                 else
                 {
                     textures.Add(mainTex);
+                    materialData[i * 8 + 3] = textures.Count - 1;
                 }
-                materialData[i * 8 + 3] = textures.Count - 1;
             }
         }
         materialsBuffer.SetData(materialData);
 
         Debug.Log("Total Textures: " + textures.Count);
+
+        int totalTextureSize = 0;
+        foreach (Texture texture in textures)
+        {
+            int width = texture.width;
+            int height = texture.height;
+            int textureSize = width * height;
+            totalTextureSize += textureSize;
+        }
+
+        textureDataBuffer = new ComputeBuffer(totalTextureSize, 4*4);
+        textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
+
+        textureCopyShader.SetBuffer(0, "TextureData", textureDataBuffer);
+
+        uint[] textureDescriptorData = new uint[textures.Count * 4];
+        int ti = 0;
+        int textureOffset = 0;
+        int textureIndex = 0;
+        foreach (Texture texture in textures)
+        {
+            int width = texture.width;
+            int height = texture.height;
+            int totalPixels = width * height;
+            int textureSize = totalPixels;
+
+            Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureOffset + " " + (textureSize * 16) + " bytes");
+            textureIndex++;
+
+            textureDescriptorData[ti++] = (uint)width;
+            textureDescriptorData[ti++] = (uint)height;
+            textureDescriptorData[ti++] = (uint)textureOffset;
+            textureDescriptorData[ti++] = (uint)0;
+            
+            textureCopyShader.SetTexture(0, "Texture", texture);
+            textureCopyShader.SetInt("TextureWidth", width);
+            textureCopyShader.SetInt("TextureHeight", height);
+            textureCopyShader.SetInt("Offset", textureOffset);
+
+            int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
+            textureCopyShader.Dispatch(0, dispatchX, 1, 1);
+
+            textureOffset += textureSize;
+        }
+        
+        textureDescriptorBuffer.SetData(textureDescriptorData);
+
+        Debug.Log("Total texture data size: " + totalTextureSize * 16 + " bytes");
 
         // Initiate async readback of vertex buffer to pass to tinybvh to build
         readbackStartTime = DateTime.UtcNow;

@@ -2,7 +2,7 @@
 #define __UNITY_PATHTRACER_TONEMAP_HLSL__
 
 // Narkowicz 2015, "ACES Filmic Tone Mapping Curve"
-float3 aces(float3 x)
+float3 Aces(float3 x)
 {
     const float a = 2.51;
     const float b = 0.03;
@@ -13,7 +13,7 @@ float3 aces(float3 x)
 }
 
 // Filmic Tonemapping Operators http://filmicworlds.com/blog/filmic-tonemapping-operators/
-float3 filmic(float3 x)
+float3 Filmic(float3 x)
 {
     float3 X = max(float3(0.0, 0.0, 0.0), x - 0.004);
     float3 result = (X * (6.2 * X + 0.5)) / (X * (6.2 * X + 1.7) + 0.06);
@@ -21,7 +21,7 @@ float3 filmic(float3 x)
 }
 
 // Lottes 2016, "Advanced Techniques and Optimization of HDR Color Pipelines"
-float3 lottes(float3 x)
+float3 Lottes(float3 x)
 {
     const float3 a = float3(1.6, 1.6, 1.6);
     const float3 d = float3(0.977, 0.977, 0.977);
@@ -39,7 +39,7 @@ float3 lottes(float3 x)
     return pow(x, a) / (pow(x, a * d) * b + c);
 }
 
-float3 reinhard(float3 x)
+float3 Reinhard(float3 x)
 {
     return x / (1.0 + x);
 }

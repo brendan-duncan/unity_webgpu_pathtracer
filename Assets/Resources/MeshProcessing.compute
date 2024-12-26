@@ -1,8 +1,9 @@
+#pragma kernel ProcessMesh
+
 #pragma multi_compile __ HAS_INDEX_BUFFER
 #pragma multi_compile __ HAS_32_BIT_INDICES
 #pragma multi_compile __ HAS_NORMALS
 #pragma multi_compile __ HAS_UVS
-#pragma kernel ProcessMesh
 
 #include "util/triangle_attributes.hlsl"
 

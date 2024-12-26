@@ -9,22 +9,37 @@
 #include "util/scatter.hlsl"
 #include "util/sky.hlsl"
 
-#define NUM_SAMPLES 1
+#define NUM_SAMPLES 10
 #define RAY_BOUNCES 10
 
-float3 PathTrace(Ray ray, inout uint rngSeed)
+bool ShadowRay(Ray ray, float tMax)
+{
+    RayHit hit = RayIntersectBvh(ray);
+    return hit.t >= tMax;
+}
+
+float3 TraceRay(Ray ray, inout uint rngSeed)
 {
     int rayBounces = RAY_BOUNCES;
-
-    float3 color = float3(1.0f, 1.0f, 1.0f);
+    float3 color = (float3)1.0f;
+    float3 radiance = (float3)0.0f;
 
     while (rayBounces >= 0)
     {
-        RayHit hit = CastRayCWBVH(ray);
-        if (hit.t < FarPlane)
+        RayHit hit = RayIntersectBvh(ray);
+        bool didHit = hit.t < FarPlane;
+        if (didHit)
         {
-            float3 attenuation = (float3)0;
+            /*float2 u = float2(rngInRange(0.0, 1.0, rngSeed), rngInRange(0.0, 1.0, rngSeed));
+            float3 lightDirection = SampleSolarDiskDirection(u, SOLAR_COS_THETA_MAX, SkyStateBuffer[0].sunDirection);
+            float3 lightIntensity = float3(
+                SkyStateBuffer[0].solarRadiances[0],
+                SkyStateBuffer[0].solarRadiances[1],
+                SkyStateBuffer[0].solarRadiances[2]);
+            Ray lightRay = {ray.origin + ray.direction * hit.t, lightDirection};
+            bool lightVisibility = ShadowRay(lightRay, FarPlane);*/
 
+            float3 attenuation = (float3)0;
             if (hit.material.mode == 3)
             {
                 if (!ScatterDielectric(hit, ray, attenuation, rngSeed))
@@ -64,36 +79,43 @@ float3 PathTrace(Ray ray, inout uint rngSeed)
                 }
             }
 
-            color *= attenuation;           
+            //radiance += lightIntensity * lightVisibility * SOLAR_INV_PDF;
+            //radiance += attenuation;
+            color *= attenuation;
             
             rayBounces--;
         }
         else
         {
-            float3 v = ray.direction;
-            float3 s = skyState[0].sunDirection;
+            if (SkyMode == 0)
+            {
+                color *= BackgroundColor(ray.direction);
+            }
+            else
+            {
+                float3 v = ray.direction;
+                float3 s = SkyStateBuffer[0].sunDirection;
 
-            float theta = acos(v.y);
-            float gamma = acos(clamp(dot(v, s), -1.0, 1.0));
+                float theta = acos(v.y);
+                float gamma = acos(clamp(dot(v, s), -1.0, 1.0));
 
-            float3 radiance = float3(
-                skyRadiance(theta, gamma, 0),
-                skyRadiance(theta, gamma, 1),
-                skyRadiance(theta, gamma, 2)
-            );
+                float3 skyRadiance = float3(
+                    SkyRadiance(theta, gamma, 0),
+                    SkyRadiance(theta, gamma, 1),
+                    SkyRadiance(theta, gamma, 2)
+                );
 
-            color *= radiance * 0.05f;
+                color *= skyRadiance;
+            }
+
             return color;
-
-            //color *= BackgroundColor(ray.direction);
-            //return color;
         }
     }
 
     return color;
 }
 
-[numthreads(256, 1, 1)]
+[numthreads(128, 1, 1)]
 void PathTracer(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= TotalRays)
@@ -122,7 +144,7 @@ void PathTracer(uint3 id : SV_DispatchThreadID)
         
         Ray ray = GetScreenRay(pixelCoordsSample);
 
-        color += PathTrace(ray, rngSeed);
+        color += TraceRay(ray, rngSeed);
     }
     #if NUM_SAMPLES > 1
     color /= (float)NUM_SAMPLES;

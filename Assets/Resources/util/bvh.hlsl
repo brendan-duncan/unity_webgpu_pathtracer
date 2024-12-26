@@ -146,7 +146,7 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
             {
                 float d = f * dot(e2, q);
                 
-                if (d > 0.0f && d < hit.t)
+                if (d > 0.0001f && d < hit.t)
                 {
                     hit.barycentric = float2(u, v);
                     hit.triIndex = asuint(BVHTris[triAddr].w);
@@ -171,7 +171,7 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
     }
 }
 
-RayHit CastRayCWBVH(const Ray ray)
+RayHit RayIntersectBvh(const Ray ray)
 {
     RayHit hit = (RayHit)0;
     hit.t = FarPlane;
@@ -259,7 +259,7 @@ RayHit CastRayCWBVH(const Ray ray)
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
         hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
         hit.position = ray.origin + hit.t * ray.direction;
-        hit.material = MaterialBuffer[triAttr.materialIndex];
+        hit.material = Materials[triAttr.materialIndex];
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
     }
     

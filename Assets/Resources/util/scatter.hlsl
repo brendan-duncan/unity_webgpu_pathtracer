@@ -20,7 +20,7 @@ bool ScatterMetal(RayHit hit, inout Ray ray, inout float3 attenuation, inout uin
     return dot(ray.direction, hit.normal) >= 0;
 }
 
-float reflectance(float cosine, float refractionIndex)
+float GetReflectance(float cosine, float refractionIndex)
 {
     // Use Schlick's approximation for reflectance.
     float r0 = (1.0f - refractionIndex) / (1.0f + refractionIndex);
@@ -42,7 +42,7 @@ bool ScatterDielectric(RayHit hit, inout Ray ray, inout float3 attenuation, inou
 
     float rnd = rngNextFloat(rngSeed);
 
-    if (cannotRefract || reflectance(cosTheta, refractRatio) > rnd)
+    if (cannotRefract || GetReflectance(cosTheta, refractRatio) > rnd)
     {
         ray.direction = normalize(reflect(unitDirection, hit.normal));
     }

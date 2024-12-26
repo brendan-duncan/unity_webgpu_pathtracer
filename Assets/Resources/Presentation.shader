@@ -1,10 +1,5 @@
 Shader "Hidden/PathTracer/Presentation"
 {
-    Properties
-    {
-        _MainTex("Main Texture", 2D) = "white" {}
-        Samples("Samples", Int) = 1
-    }
 
     CGINCLUDE
         #pragma target 4.5
@@ -23,7 +18,8 @@ Shader "Hidden/PathTracer/Presentation"
         };
 
         sampler2D _MainTex;
-        int Samples;
+        float Exposure;
+        int Mode;
 
         Varyings VertBlit(Attributes v)
         {
@@ -36,7 +32,27 @@ Shader "Hidden/PathTracer/Presentation"
         half4 FragBlit(Varyings i) : SV_Target
         {
             float3 color = tex2D(_MainTex, i.uv).rgb;
-            return half4(lottes(color), 1.0f);
+            if (Exposure > 0.0f)
+            {
+                color *= 1.0f / exp2(Exposure);
+            }
+            switch (Mode)
+            {
+                case 0:
+                    color = Aces(color);
+                    break;
+                case 1:
+                    color = Filmic(color);
+                    break;
+                case 2:
+                    color = Reinhard(color);
+                    break;
+                default:
+                    color = Lottes(color);
+                    break;
+            }
+            float3 srgb = pow(color, 1.0f / 2.2f);
+            return half4(srgb, 1.0f);
         }
     ENDCG
 

@@ -8,25 +8,17 @@ struct Material
     float mode;
     float ior;
 };
+StructuredBuffer<Material> Materials;
 
-RWStructuredBuffer<Material> MaterialBuffer;
-
-Texture2D<float4> AlbedoTexture1;
-SamplerState samplerAlbedoTexture1;
-Texture2D<float4> AlbedoTexture2;
-SamplerState samplerAlbedoTexture2;
-Texture2D<float4> AlbedoTexture3;
-SamplerState samplerAlbedoTexture3;
-Texture2D<float4> AlbedoTexture4;
-SamplerState samplerAlbedoTexture4;
-Texture2D<float4> AlbedoTexture5;
-SamplerState samplerAlbedoTexture5;
-Texture2D<float4> AlbedoTexture6;
-SamplerState samplerAlbedoTexture6;
-Texture2D<float4> AlbedoTexture7;
-SamplerState samplerAlbedoTexture7;
-Texture2D<float4> AlbedoTexture8;
-SamplerState samplerAlbedoTexture8;
+struct TextureDescriptor
+{
+    uint width;
+    uint height;
+    uint offset;
+    uint padding;
+};
+StructuredBuffer<TextureDescriptor> TextureDescriptors;
+StructuredBuffer<float4> TextureData;
 
 float3 GetAlbedoColor(Material material, float2 uv)
 {
@@ -35,20 +27,25 @@ float3 GetAlbedoColor(Material material, float2 uv)
         return material.albedo.rgb;
     }
     
-    const uint index = (uint)material.albedo.a;
-    switch (index)
-    {
-        case 0: return AlbedoTexture1.SampleLevel(samplerAlbedoTexture1, uv, 0).rgb;
-        case 1: return AlbedoTexture2.SampleLevel(samplerAlbedoTexture2, uv, 0).rgb;
-        case 2: return AlbedoTexture3.SampleLevel(samplerAlbedoTexture3, uv, 0).rgb;
-        case 3: return AlbedoTexture4.SampleLevel(samplerAlbedoTexture4, uv, 0).rgb;
-        case 4: return AlbedoTexture5.SampleLevel(samplerAlbedoTexture5, uv, 0).rgb;
-        case 5: return AlbedoTexture6.SampleLevel(samplerAlbedoTexture6, uv, 0).rgb;
-        case 6: return AlbedoTexture7.SampleLevel(samplerAlbedoTexture7, uv, 0).rgb;
-        case 7: return AlbedoTexture8.SampleLevel(samplerAlbedoTexture8, uv, 0).rgb;
-    }
+    uint index = (uint)material.albedo.a;
 
-    return material.albedo.rgb;
+    uint offset = TextureDescriptors[index].offset;
+    uint width = TextureDescriptors[index].width;
+    uint height = TextureDescriptors[index].height;
+
+    uint x = (uint)(uv.x * (width - 1));
+    uint y = (uint)(uv.y * (height - 1));
+    uint pixelOffset = offset + (y * width + x);
+
+    return TextureData[pixelOffset].rgb;
+
+    /*uint pixelData = TextureData.Load(pixelOffset);
+    uint r = (pixelData >> 0) & 0xFF;
+    uint g = (pixelData >> 8) & 0xFF;
+    uint b = (pixelData >> 16) & 0xFF;
+
+    return float3(r / 255.0f, g / 255.0f, b / 255.0f);*/
+    //return material.albedo.rgb;
 }
 
 #endif // __UNITY_PATHTRACER_MATERIAL_HLSL__

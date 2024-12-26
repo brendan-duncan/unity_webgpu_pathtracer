@@ -2,11 +2,29 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
+public enum TonemapMode {
+    Aces = 0,
+    Filmic = 1,
+    Reinhard = 2,
+    Lottes = 3
+}
+
+public enum SkyMode {
+    Basic,
+    Physical
+}
+
 [RequireComponent(typeof(Camera))]
 public class PathTracer : MonoBehaviour
 {
     public bool backfaceCulling = true;
+    public float folalLength = 10.0f;
+    public float aperature = 0.0f;
     public float skyTurbidity = 1.0f;
+    public SkyMode skyMode = SkyMode.Basic;
+    public float exposureStops = 2.0f;
+    public TonemapMode tonemapMode = TonemapMode.Lottes;
+    
 
     Camera sourceCamera;
     BVHScene bvhScene;
@@ -65,9 +83,9 @@ public class PathTracer : MonoBehaviour
         skyStateBuffer = new ComputeBuffer(40, 4);
         skyState = new SkyState();
         float[] direction = { lightDirection.x, lightDirection.y, lightDirection.z };
-        float[] color = { 0.3f, 0.2f, 0.1f };
+        float[] groundAlbedo = { 1.0f, 1.0f, 1.0f };
 
-        skyState.Init(direction, color, skyTurbidity);
+        skyState.Init(direction, groundAlbedo, skyTurbidity);
         skyState.UpdateBuffer(skyStateBuffer);
     }
 
@@ -79,6 +97,7 @@ public class PathTracer : MonoBehaviour
         outputRT[0]?.Release();
         outputRT[1]?.Release();
         cmd?.Release();
+        skyStateBuffer?.Release();
     }
 
     void Update()
@@ -102,8 +121,7 @@ public class PathTracer : MonoBehaviour
         outputWidth = sourceCamera.scaledPixelWidth;
         outputHeight = sourceCamera.scaledPixelHeight;
         totalRays = outputWidth * outputHeight;
-        int dispatchX = Mathf.CeilToInt(totalRays / 256.0f);
-
+        int dispatchX = Mathf.CeilToInt(totalRays / 128.0f);
 
         Vector3 lastDirection = lightDirection;
         Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
@@ -165,9 +183,10 @@ public class PathTracer : MonoBehaviour
         presentationMaterial.SetTexture("_MainTex", outputRT[currentRT]);
         presentationMaterial.SetInt("OutputWidth", outputWidth);
         presentationMaterial.SetInt("OutputHeight", outputHeight);
-        presentationMaterial.SetInt("Samples", currentSample);
+        presentationMaterial.SetFloat("Exposure", exposureStops);
+        presentationMaterial.SetInt("Mode", (int)tonemapMode);
 
-        // Overwrite image with output from raytracer
+        // Overwrite image with output from raytracer, applying tonemapping
         cmd.Blit(outputRT[currentRT], destination, presentationMaterial);
 
         currentRT = 1 - currentRT;
@@ -190,6 +209,7 @@ public class PathTracer : MonoBehaviour
         cmd.SetComputeTextureParam(shader, kernelIndex, "Output", outputRT[currentRT]);
         cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", outputRT[1 - currentRT]);
         cmd.SetComputeBufferParam(shader, 0, "RNGStateBuffer", rngStateBuffer);
-        cmd.SetComputeBufferParam(shader, 0, "skyState", skyStateBuffer);
+        cmd.SetComputeBufferParam(shader, 0, "SkyStateBuffer", skyStateBuffer);
+        cmd.SetComputeIntParam(shader, "SkyMode", (int)skyMode);
     }
 }

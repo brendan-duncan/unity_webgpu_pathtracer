@@ -1,7 +1,8 @@
 #ifndef __UNITY_PATHTRACER_COMMON__
 #define __UNITY_PATHTRACER_COMMON__
 
-#define PI 3.14159265359f
+#define PI  3.14159265359f
+#define DEGREES_TO_RADIANS (PI / 180.0f)
 
 uint TotalRays;
 uint CurrentSample;
