@@ -1,5 +1,7 @@
 #pragma kernel PathTracer
 
+#pragma multi_compile __ HAS_TEXTURES
+
 #include "util/bvh.hlsl"
 #include "util/camera.hlsl"
 #include "util/common.hlsl"

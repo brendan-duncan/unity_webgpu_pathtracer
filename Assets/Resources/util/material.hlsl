@@ -1,8 +1,6 @@
 #ifndef __UNITY_PATHTRACER_MATERIAL_HLSL__
 #define __UNITY_PATHTRACER_MATERIAL_HLSL__
 
-#pragma multi_compile __ HAS_TEXTURES
-
 struct Material
 {
     float4 albedo;
