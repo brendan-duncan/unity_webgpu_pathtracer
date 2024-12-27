@@ -6,7 +6,6 @@ RWStructuredBuffer<uint> RNGStateBuffer;
 void rngNextInt(inout uint state)
 {
     // PCG random number generator
-    // Based on https://www.shadertoy.com/view/XlGcRh
     uint oldState = state + 747796405u + 2891336453u;
     uint word = ((oldState >> ((oldState >> 28u) + 4u)) ^ oldState) * 277803737u;
     state = (word >> 22u) ^ word;
@@ -15,7 +14,7 @@ void rngNextInt(inout uint state)
 float rngNextFloat(inout uint state)
 {
     rngNextInt(state);
-    return (float)state / (float)(0xffffffffu);
+    return (float)state / (float)0xffffffffu;
 }
 
 float rngInRange(float min, float max, inout uint state) {
@@ -31,6 +30,16 @@ float3 rngInSphere(inout uint state)
     } while (length(p * p) > 1.0f);
 
     return p;
+}
+
+float3 RandomCosineHemisphere(float3 normal, inout uint state)
+{
+    // See https://ameye.dev/notes/sampling-the-hemisphere/
+	float theta = acos(sqrt(rngNextFloat(state)));
+	float phi = 2.0f * PI * rngNextFloat(state);
+
+	float3x3 basis = GetBasisMatrix(normal);
+	return sin(theta) * (cos(phi) * basis[0] + sin(phi) * basis[1]) + cos(theta) * basis[2];
 }
 
 #endif // __UNITY_PATHTRACER_RANDOM_HLSL__

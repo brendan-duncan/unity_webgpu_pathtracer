@@ -225,12 +225,15 @@ public class BVHScene
 
         Debug.Log("Meshes processed. Total triangles: " + totalTriangleCount);
 
-        materialsBuffer = new ComputeBuffer(materials.Count, 32);
+        // Number of float/uint values in material.hlsl
+        const int materialSize = 16;
+
+        materialsBuffer = new ComputeBuffer(materials.Count, materialSize * 4);
         textures.Clear();
 
         Debug.Log("Total materials: " + materials.Count);
 
-        float[] materialData = new float[materials.Count * 8];
+        float[] materialData = new float[materials.Count * materialSize];
         for (int i = 0; i < materials.Count; i++)
         {
             Color color = 
@@ -241,27 +244,44 @@ public class BVHScene
                 materials[i].HasProperty("_EmissionColor") ? materials[i].GetColor("_EmissionColor")
                 : materials[i].HasProperty("emissionFactor") ? materials[i].GetColor("emissionFactor")
                 : Color.black;
-            color += emission;
-            float metalic = 
+            float metallic = 
                 materials[i].HasProperty("_Metallic") ? materials[i].GetFloat("_Metallic")
                 : materials[i].HasProperty("metallicFactor") ? materials[i].GetFloat("metallicFactor")
                 : 0.0f;
-            float smoothness =
-                materials[i].HasProperty("_Glossiness") ? materials[i].GetFloat("_Glossiness")
-                : materials[i].HasProperty("roughnessFactor") ? 1.0f - materials[i].GetFloat("roughnessFactor")
+            float roughness =
+                materials[i].HasProperty("_Glossiness") ? 1.0f - materials[i].GetFloat("_Glossiness")
+                : materials[i].HasProperty("roughnessFactor") ? materials[i].GetFloat("roughnessFactor")
                 : 0.0f;
             int mode = 
                 materials[i].HasProperty("_Mode") ? materials[i].GetInt("_Mode")
                 : materials[i].HasProperty("mode") ? materials[i].GetInt("mode")
                 : 0;
-            materialData[i * 8 + 0] = color.r;
-            materialData[i * 8 + 1] = color.g;
-            materialData[i * 8 + 2] = color.b;
-            materialData[i * 8 + 3] = -1.0f;
-            materialData[i * 8 + 4] = metalic;
-            materialData[i * 8 + 5] = smoothness;
-            materialData[i * 8 + 6] = (float)mode;
-            materialData[i * 8 + 7] = 1.3f;
+            float ior = 
+                materials[i].HasProperty("_IOR") ? materials[i].GetFloat("_IOR")
+                : materials[i].HasProperty("ior") ? materials[i].GetFloat("ior")
+                : 1.1f;
+
+            int mdi = i * materialSize;
+
+            materialData[mdi + 0] = color.r;
+            materialData[mdi + 1] = color.g;
+            materialData[mdi + 2] = color.b;
+            materialData[mdi + 3] = color.a; // transmission
+
+            materialData[mdi + 4] = emission.r;
+            materialData[mdi + 5] = emission.g;
+            materialData[mdi + 6] = emission.b;
+            materialData[mdi + 7] = 0.0f;
+
+            materialData[mdi + 8] = metallic;
+            materialData[mdi + 9] = roughness;
+            materialData[mdi + 10] = (float)mode;
+            materialData[mdi + 11] = ior;
+
+            materialData[mdi + 12] = -1.0f; // textures
+            materialData[mdi + 13] = -1.0f;
+            materialData[mdi + 14] = -1.0f;
+            materialData[mdi + 15] = -1.0f;
 
             Texture mainTex = materials[i].HasProperty("_MainTex") ? materials[i].GetTexture("_MainTex")
                 : materials[i].HasProperty("baseColorTexture") ? materials[i].GetTexture("baseColorTexture")
@@ -271,12 +291,12 @@ public class BVHScene
             {
                 if (textures.Contains(mainTex))
                 {
-                    materialData[i * 8 + 3] = textures.IndexOf(mainTex);
+                    materialData[mdi + 12] = textures.IndexOf(mainTex);
                 }
                 else
                 {
                     textures.Add(mainTex);
-                    materialData[i * 8 + 3] = textures.Count - 1;
+                    materialData[mdi + 12] = textures.Count - 1;
                 }
             }
         }
@@ -295,7 +315,8 @@ public class BVHScene
 
         if (totalTextureSize > 0)
         {
-            textureDataBuffer = new ComputeBuffer(totalTextureSize, 4*4);
+            textureDataBuffer = new ComputeBuffer(totalTextureSize, 4);
+
             textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
 
             textureCopyShader.SetBuffer(0, "TextureData", textureDataBuffer);
@@ -309,9 +330,8 @@ public class BVHScene
                 int width = texture.width;
                 int height = texture.height;
                 int totalPixels = width * height;
-                int textureSize = totalPixels;
 
-                Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureOffset + " " + (textureSize * 16) + " bytes");
+                Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureOffset + " " + (totalPixels * 4) + " bytes");
                 textureIndex++;
 
                 textureDescriptorData[ti++] = (uint)width;
@@ -327,7 +347,7 @@ public class BVHScene
                 int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
                 textureCopyShader.Dispatch(0, dispatchX, 1, 1);
 
-                textureOffset += textureSize;
+                textureOffset += totalPixels;
             }
             
             textureDescriptorBuffer.SetData(textureDescriptorData);

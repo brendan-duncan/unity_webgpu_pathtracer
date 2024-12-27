@@ -1,21 +1,31 @@
 #ifndef __UNITY_PATHTRACER_SCATTER_HLSL__
 #define __UNITY_PATHTRACER_SCATTER_HLSL__
 
+#include "common.hlsl"
+
 bool ScatterLambertian(RayHit hit, inout Ray ray, inout float3 attenuation, inout uint rngSeed)
 {
-    ray.origin = hit.position;
-    ray.direction = normalize(ray.direction + rngInSphere(rngSeed));
     attenuation = GetAlbedoColor(hit.material, hit.uv);
+
+    ray.direction = normalize(ray.direction + rngInSphere(rngSeed));
+    ray.origin = hit.position + hit.normal * 0.001f;
+
+    /*float3 v = DirectionInCosineWeightedHemisphere(rngSeed);
+    float3x3 onb = PixarOnb(hit.normal);
+    ray.direction = normalize(mul(onb, v));
+    ray.origin = hit.position;*/
+
     return true;
 }
 
 bool ScatterMetal(RayHit hit, inout Ray ray, inout float3 attenuation, inout uint rngSeed)
 {
-    ray.origin = hit.position;
     float3 reflected = reflect(normalize(ray.direction), hit.normal);
-    float smoothness = 1.0f - hit.material.metalicSmoothness.g;
-    ray.direction = normalize(reflected + smoothness * rngInSphere(rngSeed));
+    float roughness = hit.material.metallicRoughness.g;
+    ray.direction = normalize(reflected + roughness * rngInSphere(rngSeed));
     attenuation = GetAlbedoColor(hit.material, hit.uv);
+
+    ray.origin = hit.position + ray.direction * 0.001f;
 
     return dot(ray.direction, hit.normal) >= 0;
 }
@@ -31,7 +41,6 @@ float GetReflectance(float cosine, float refractionIndex)
 bool ScatterDielectric(RayHit hit, inout Ray ray, inout float3 attenuation, inout uint rngSeed)
 {
     attenuation = (float3)1.0f;
-    //attenuation = GetAlbedoColor(hit.material, hit.uv);
 
     float refractRatio = 1.0f / hit.material.ior;
     float3 unitDirection = normalize(ray.direction);
@@ -51,7 +60,7 @@ bool ScatterDielectric(RayHit hit, inout Ray ray, inout float3 attenuation, inou
         ray.direction = normalize(refract(unitDirection, hit.normal, refractRatio));
     }
 
-    ray.origin = hit.position;
+    ray.origin = hit.position + ray.direction * 0.001f;
     
     return true;
 }

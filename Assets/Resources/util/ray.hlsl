@@ -11,7 +11,7 @@ struct Ray
 
 struct RayHit
 {
-    float t;
+    float distance;
     float2 barycentric;
     uint triIndex;
     uint steps;

@@ -11,27 +11,81 @@
 #include "util/scatter.hlsl"
 #include "util/sky.hlsl"
 
-#define NUM_SAMPLES 10
+#define NUM_SAMPLES 1
 #define RAY_BOUNCES 10
 
-bool ShadowRay(Ray ray, float tMax)
+/*bool ScatterRay(inout Ray ray, RayHit hit, inout uint rngSeed)
 {
-    RayHit hit = RayIntersectBvh(ray);
-    return hit.t >= tMax;
+    //float3x3 uvw = GetBasisMatrix(hit.normal);
+    float3 diffuseDir = RandomCosineHemisphere(hit.normal, rngSeed);
+
+    ray.origin = hit.position;
+    ray.direction = diffuseDir;
+
+    //doSpecular = select(0.0, 1.0, rand2D() < hitRec.material.specularStrength);
+
+    // var diffuse_dir = uniform_sampling_hemisphere();
+    // var diffuse_dir = cosine_sampling_hemisphere();
+    // if(near_zero(diffuse_dir)) {
+    // 	diffuse_dir = hitRec.normal;
+    // }
+
+    // scattered = Ray(hitRec.p, normalize(diffuse_dir));
+
+    return true;
 }
+
+float3 TraceRay2(Ray ray, inout uint rngSeed)
+{
+    float3 accumilatedRadiance = (float3)0.0f;
+    float3 throughput = (float3)1.0f;
+
+    for (int i = 0; i < RAY_BOUNCES; ++i)
+    {
+        RayHit hit = RayIntersectBvh(ray);
+        bool didHit = hit.distance < FarPlane;
+        if (!didHit)
+        {
+            accumilatedRadiance += throughput * SampleSkyRadiance(ray.direction);
+            break;
+        }
+
+        float3 albedoSample = GetAlbedoColor(hit.material, hit.uv);
+        float metallic = hit.material.metallicRoughness.r;
+        float roughness = hit.material.metallicRoughness.g;
+        float ior = hit.material.ior;
+
+        float3 emissionColor = hit.material.emission;
+        accumilatedRadiance += emissionColor * throughput;
+        throughput *= albedoSample;
+
+        ScatterRay(ray, hit, rngSeed);
+
+        float nDotR = dot(ray.direction, hit.normal);
+        if (nDotR > 0.0f)
+        {
+            throughput *= nDotR * (1.0f / PI);
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    return accumilatedRadiance;
+}*/
 
 float3 TraceRay(Ray ray, inout uint rngSeed)
 {
-    int rayBounces = RAY_BOUNCES;
+    int rayBounces = 0;
     float3 color = (float3)1.0f;
-    float3 radiance = (float3)0.0f;
 
-    while (rayBounces >= 0)
+    while (rayBounces < RAY_BOUNCES)
     {
         RayHit hit = RayIntersectBvh(ray);
-        bool didHit = hit.t < FarPlane;
+        bool didHit = hit.distance < FarPlane;
         if (didHit)
-        {
+        {           
             float3 attenuation = (float3)0;
             if (hit.material.mode == 3)
             {
@@ -42,15 +96,15 @@ float3 TraceRay(Ray ray, inout uint rngSeed)
             }
             else
             {
-                float metalic = hit.material.metalicSmoothness.r;
-                if (metalic > 0.0f)
+                float metallic = hit.material.metallicRoughness.r;
+                if (metallic > 0.0f)
                 {
                     Ray lambertRay = {ray.origin, ray.direction};
                     if (!ScatterMetal(hit, ray, attenuation, rngSeed))
                     {
                         return color;
                     }
-                    if (metalic < 1.0f)
+                    if (metallic < 1.0f)
                     {
                         float3 lambert = (float3)0;
                         if (!ScatterLambertian(hit, lambertRay, lambert, rngSeed))
@@ -58,9 +112,9 @@ float3 TraceRay(Ray ray, inout uint rngSeed)
                             return color;
                         }
 
-                        ray.direction = lerp(ray.direction, lambertRay.direction, metalic);
+                        ray.direction = lerp(ray.direction, lambertRay.direction, metallic);
 
-                        attenuation = lerp(attenuation, lambert, metalic);
+                        attenuation = lerp(attenuation, lambert, metallic);
                     }
                 }
                 else 
@@ -74,7 +128,7 @@ float3 TraceRay(Ray ray, inout uint rngSeed)
 
             color *= attenuation;
             
-            rayBounces--;
+            rayBounces++;
         }
         else
         {
@@ -99,7 +153,7 @@ float3 TraceRay(Ray ray, inout uint rngSeed)
                 color *= skyRadiance;
             }
 
-            return color;
+            break;
         }
     }
 

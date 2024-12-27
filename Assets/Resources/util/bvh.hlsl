@@ -17,7 +17,6 @@ struct BVHNode
     float4 n4;
 };
 
-
 StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;
 StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
@@ -146,14 +145,14 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
             {
                 float d = f * dot(e2, q);
                 
-                if (d > 0.0001f && d < hit.t)
+                if (d > 0.0001f && d < hit.distance)
                 {
                     hit.barycentric = float2(u, v);
                     hit.triIndex = asuint(BVHTris[triAddr].w);
 
                     if (!BackfaceCulling)
                     {
-                        hit.t = d;
+                        hit.distance = d;
                     }
                     else
                     {
@@ -162,7 +161,7 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
                         // Skip the back face of the triangle
                         if (dot(hit.normal, ray.direction) < 0.0f)
                         {
-                            hit.t = d;
+                            hit.distance = d;
                         }
                     }
                 }
@@ -174,7 +173,7 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
 RayHit RayIntersectBvh(const Ray ray)
 {
     RayHit hit = (RayHit)0;
-    hit.t = FarPlane;
+    hit.distance = FarPlane;
 
     float3 invDir = rcp(ray.direction.xyz);
     uint octinv4 = (7 - ((ray.direction.x < 0 ? 4 : 0) | (ray.direction.y < 0 ? 2 : 0) | (ray.direction.z < 0 ? 1 : 0))) * 0x1010101;
@@ -210,7 +209,7 @@ RayHit RayIntersectBvh(const Ray ray)
             uint childNodeIndex = childNodeBaseIndex + relativeIndex;
 
             BVHNode node = BVHNodes[childNodeIndex];
-            uint hitmask = IntersectCWBVHNode(ray.origin, invDir, octinv4, hit.t, node);
+            uint hitmask = IntersectCWBVHNode(ray.origin, invDir, octinv4, hit.distance, node);
 
             nodeGroup.x = asuint(node.n1.x);
             nodeGroup.y = (hitmask & 0xFF000000) | (asuint(node.n0.w) >> 24);
@@ -254,11 +253,11 @@ RayHit RayIntersectBvh(const Ray ray)
 
     hit.steps = count;
 
-    if (hit.t < FarPlane)
+    if (hit.distance < FarPlane)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
         hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
-        hit.position = ray.origin + hit.t * ray.direction;
+        hit.position = ray.origin + hit.distance * ray.direction;
         hit.material = Materials[triAttr.materialIndex];
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
     }

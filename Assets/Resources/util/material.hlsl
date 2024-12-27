@@ -3,10 +3,12 @@
 
 struct Material
 {
-    float4 albedo;
-    float2 metalicSmoothness;
+    float4 albedoTransmission;
+    float4 emission;
+    float2 metallicRoughness;
     float mode;
     float ior;
+    float4 textures;
 };
 StructuredBuffer<Material> Materials;
 
@@ -20,38 +22,38 @@ struct TextureDescriptor
 
 #if HAS_TEXTURES
 StructuredBuffer<TextureDescriptor> TextureDescriptors;
-StructuredBuffer<float4> TextureData;
+StructuredBuffer<uint> TextureData;
 #endif
 
 float3 GetAlbedoColor(Material material, float2 uv)
 {
 #if HAS_TEXTURES
-    if (material.albedo.a < 0.0f)
+    if (material.textures.x < 0.0f)
     {
-        return material.albedo.rgb;
+        return material.albedoTransmission.rgb + material.emission.rgb;
     }
     
-    uint index = (uint)material.albedo.a;
+    uint textureIndex = (uint)material.textures.x;
 
-    uint offset = TextureDescriptors[index].offset;
-    uint width = TextureDescriptors[index].width;
-    uint height = TextureDescriptors[index].height;
+    uint offset = TextureDescriptors[textureIndex].offset;
+    uint width = TextureDescriptors[textureIndex].width;
+    uint height = TextureDescriptors[textureIndex].height;
+
+    uv.x = fmod(abs(uv.x), 1.0f);
+    uv.y = fmod(abs(uv.y), 1.0f);
 
     uint x = (uint)(uv.x * (width - 1));
     uint y = (uint)(uv.y * (height - 1));
     uint pixelOffset = offset + (y * width + x);
 
-    return TextureData[pixelOffset].rgb;
-
-    /*uint pixelData = TextureData.Load(pixelOffset);
+    uint pixelData = TextureData[pixelOffset];
     uint r = (pixelData >> 0) & 0xFF;
     uint g = (pixelData >> 8) & 0xFF;
     uint b = (pixelData >> 16) & 0xFF;
 
-    return float3(r / 255.0f, g / 255.0f, b / 255.0f);*/
-    //return material.albedo.rgb;
+    return float3(r / 255.0f, g / 255.0f, b / 255.0f) + material.emission.rgb;
 #else
-    return material.albedo.rgb;
+    return material.albedoTransmission.rgb + material.emission.rgb;
 #endif
 }
 

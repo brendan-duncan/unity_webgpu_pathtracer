@@ -26,18 +26,6 @@ struct SkyState
 
 StructuredBuffer<SkyState> SkyStateBuffer;
 
-float3x3 PixarOnb(float3 n)
-{
-    // https://www.jcgt.org/published/0006/01/01/paper-lowres.pdf
-    float s = n.z >= 0.0f ? -1.0f : 1.0f;
-    float a = -1.0f / (s + n.z);
-    float b = n.x * n.y * a;
-    float3 u = float3(1.0f + s * n.x * n.x * a, s * b, -s * n.x);
-    float3 v = float3(b, s + n.y * n.y * a, -n.y);
-
-    return float3x3(u, v, n);
-}
-
 // `u` is a random number in [0, 1].
 float3 DirectionInCone(float2 u, float cosThetaMax)
 {
@@ -55,7 +43,7 @@ float3 DirectionInCone(float2 u, float cosThetaMax)
 float3 SampleSolarDiskDirection(float2 u, float cosThetaMax, float3 sunDirection)
 {
     float3 v = DirectionInCone(u, cosThetaMax);
-    float3x3 onb = PixarOnb(sunDirection);
+    float3x3 onb = GetBasisMatrix(sunDirection);
     float3 res = mul(onb, v);
     return res;
 }
@@ -81,7 +69,7 @@ float SkyRadiance(float theta, float gamma, uint channel)  {
     float expM = exp(p4 * gamma);
     float rayM = cosGamma2;
     float mieMLhs = 1.0f + cosGamma2;
-    float mieMRhs = (float)pow(1.0 + p8 * p8 - 2.0 * p8 * cosGamma, 1.5f);
+    float mieMRhs = (float)pow(abs(1.0 + p8 * p8 - 2.0 * p8 * cosGamma), 1.5f);
     float mieM = mieMLhs / mieMRhs;
     float zenith = sqrt(cosTheta);
     float radianceLhs = 1.0 + p0 * exp(p1 / (cosTheta + 0.01));
@@ -89,6 +77,26 @@ float SkyRadiance(float theta, float gamma, uint channel)  {
     float radianceDist = radianceLhs * radianceRhs;
 
     return r * radianceDist;
+}
+
+
+float3 SampleSkyRadiance(float3 direction)
+{
+    if (SkyMode == 1)
+    {
+        float3 sunDirection = SkyStateBuffer[0].sunDirection;
+
+        float theta = acos(direction.y);
+        float gamma = acos(clamp(dot(direction, sunDirection), -1.0, 1.0));
+
+        return float3(
+            SkyRadiance(theta, gamma, 0),
+            SkyRadiance(theta, gamma, 1),
+            SkyRadiance(theta, gamma, 2)
+        );
+    }
+    
+    return BackgroundColor(direction);
 }
 
 #endif // __UNITY_PATHTRACER_SKY_HLSL__

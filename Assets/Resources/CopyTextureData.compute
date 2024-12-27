@@ -1,7 +1,7 @@
 #pragma kernel CopyTextureData
 
 Texture2D<float4> Texture;
-RWStructuredBuffer<float4> TextureData;
+RWStructuredBuffer<uint> TextureData;
 
 uint TextureWidth;
 uint TextureHeight;
@@ -21,13 +21,11 @@ void CopyTextureData(uint3 id : SV_DispatchThreadID)
     float4 texel = Texture.Load(int3(pixelX, pixelY, 0));
     uint writeIndex = pixelIndex + Offset;
 
-    /*uint r = (uint)(texel.r * 255.0f);
-    uint g = (uint)(texel.g * 255.0f);
-    uint b = (uint)(texel.b * 255.0f);
-    uint a = (uint)(texel.a * 255.0f);
-    uint texelData = (a << 24) | (r << 16) | (g << 8) | b;
+    uint r = (uint)(texel.r * 255.0f) & 0xff;
+    uint g = (uint)(texel.g * 255.0f) & 0xff;
+    uint b = (uint)(texel.b * 255.0f) & 0xff;
+    uint a = (uint)(texel.a * 255.0f) & 0xff;
+    uint texelData = (a << 24) | (b << 16) | (g << 8) | r;
 
-    TextureData[writeIndex] = asuint(texelData);*/
-
-    TextureData[writeIndex] = texel;
+    TextureData[writeIndex] = asuint(texelData);
 }
