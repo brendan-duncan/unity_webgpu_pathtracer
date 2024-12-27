@@ -14,7 +14,7 @@
 #define NUM_SAMPLES 1
 #define RAY_BOUNCES 10
 
-/*bool ScatterRay(inout Ray ray, RayHit hit, inout uint rngSeed)
+bool ScatterRay(inout Ray ray, RayHit hit, inout uint rngSeed)
 {
     //float3x3 uvw = GetBasisMatrix(hit.normal);
     float3 diffuseDir = RandomCosineHemisphere(hit.normal, rngSeed);
@@ -73,7 +73,7 @@ float3 TraceRay2(Ray ray, inout uint rngSeed)
     }
 
     return accumilatedRadiance;
-}*/
+}
 
 float3 TraceRay(Ray ray, inout uint rngSeed)
 {
