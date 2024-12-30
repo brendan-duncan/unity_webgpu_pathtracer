@@ -59,13 +59,8 @@ float3 DirectionInCone(float2 u, float cosThetaMax)
 float3 SampleSolarDiskDirection(float2 u, float cosThetaMax, float3 sunDirection)
 {
     float3 v = DirectionInCone(u, cosThetaMax);
-    //float3 X = 0.0f;
-    //float3 Y = 0.0f;
-    //GetONB(sunDirection, X, Y);
-    //float3 res = ToLocal(X, Y, sunDirection, v);
     float3x3 onb = GetONB(sunDirection);
-    float3 res = ToLocal(onb, v);
-    return res;
+    return ToLocal(onb, v);
 }
 
 float SkyRadiance(float theta, float gamma, uint channel)  {

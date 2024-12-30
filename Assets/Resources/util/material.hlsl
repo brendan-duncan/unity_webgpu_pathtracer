@@ -1,6 +1,32 @@
 #ifndef __UNITY_PATHTRACER_MATERIAL_HLSL__
 #define __UNITY_PATHTRACER_MATERIAL_HLSL__
 
+// size = 120 bytes
+struct DisneyMaterial
+{
+    float3 baseColor; // [0, 3]
+    float anisotropic; // 4
+    float3 emission; // [5, 7]
+    float metallic; // 8
+    float roughness; // 9
+    float subsurface; // 10
+    float specularTint; // 11
+    float sheen; // 12
+    float sheenTint; // 13
+    float clearcoat; // 14
+    float clearcoatRoguhness; // 15
+    float specTrans; // 16
+    float ior; // 17
+    float mediumType; // 18
+    float mediumDensity; // 19
+    float3 mediumColor; // [20, 22]
+    float mediumAnisotropy; // 23
+    float opacity; // 24
+    float alphaMode; // 25
+    float alphaCutoff; // 26
+    float4 textures; // [27, 30]
+};
+
 struct Material
 {
     float4 albedoTransmission;
@@ -140,7 +166,7 @@ float3 GetNormalMapSample(Material material, float2 uv)
     else
     {
         float4 pixel = SampleTexture((int)material.textures.z, uv, false);
-        return 2.0f * pixel.rgb - 1.0f;
+        return normalize(2.0f * pixel.rgb - 1.0f);
     }
 #else
     return float3(0.0f, 0.0f, 1.0f);

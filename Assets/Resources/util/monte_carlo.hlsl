@@ -45,19 +45,37 @@ float3 TraceRayMonteCarlo(Ray ray, inout uint rngSeed)
                 }
             }
 
-            accumulatedColor += emission.rgb * colorFactor;
+            /*if (EnvironmentMode == 1)
+            {
+                float2 u = float2(RandomFloat(rngSeed), RandomFloat(rngSeed));
+                float3 sunDirection = SkyStateBuffer[0].sunDirection;
+                float3 lightDirection = normalize(SampleSolarDiskDirection(u, SOLAR_COS_THETA_MAX, sunDirection));
+                float3 lightIntensity = SampleSkyRadiance(ray.direction, 1);
+                Ray shadowRay = { hit.position + lightDirection * 0.0001f, lightDirection };
+                float lightVisibility = ShadowRay(shadowRay);
+                float3 brdf = albedo * 0.31830987f;//FRAC_1_PI;
+                float3 reflectance = brdf * dot(hit.normal, lightDirection);
+                accumulatedColor += emission.rgb + lightIntensity * reflectance * lightIntensity * SOLAR_INV_PDF;
+                return sunDirection;
+            }
+            else*/
+            {
+                accumulatedColor += emission.rgb * colorFactor;
+            }
 
-            if (material.textures.z >= 0.0f)
+            //accumulatedColor += emission.rgb * colorFactor;
+
+            /*if (material.textures.z >= 0.0f)
             {
                 float3 tangent = normalize(hit.tangent);
                 float3 normal = normalize(hit.normal);
                 float3 bitangent = normalize(cross(shadingNormal, tangent));
+
                 float3 normalSample = GetNormalMapSample(material, hit.uv);
                 float3x3 normalBasis = float3x3(tangent, bitangent, normal);
-                normalSample = normalSample * 2.0f - 1.0f;
-                shadingNormal = normalize(ToLocal(normalBasis, normalSample));
-            }
-            
+                float3 newNormal = normalize(ToWorld(normalBasis, normalSample));
+                shadingNormal = newNormal;
+            }*/
 
             // MIS weights empirically chosen depending on what works better for which materials:
             //     roughness = 0, metallic = 0 : vndf + cosine + light

@@ -50,9 +50,9 @@ void PathTracer(uint3 id : SV_DispatchThreadID)
     #if NUM_SAMPLES > 1
     color /= (float)NUM_SAMPLES;
     #endif
-
-    float3 currentColor = AccumulatedOutput[pixelCoords].rgb;
-    float3 accumilatedColor = (color + currentColor * CurrentSample) / (CurrentSample + 1.0f);
+    
+    float4 currentColor = AccumulatedOutput[pixelCoords];
+    float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + 1.0f);
 
     Output[pixelCoords] = float4(accumilatedColor, 1.0f);
 

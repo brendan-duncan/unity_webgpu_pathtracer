@@ -287,4 +287,17 @@ float3 GetGeometricNormal(RayHit hit)
     return normalize(cross(e1, e2));
 }
 
+float ShadowRay(const Ray ray)
+{
+    RayHit hit = RayIntersectBvh(ray);
+    if (hit.distance < FarPlane)
+    {
+        return 0.0f;
+    }
+    else
+    {
+        return 1.0f;
+    }
+}
+
 #endif // __UNITY_PATHTRACER_BVH_HLSL__
