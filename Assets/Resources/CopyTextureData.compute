@@ -5,21 +5,23 @@ RWStructuredBuffer<uint> TextureData;
 
 uint TextureWidth;
 uint TextureHeight;
-int Offset;
+int TextureDataOffset;
 
 [numthreads(128, 1, 1)]
 void CopyTextureData(uint3 id : SV_DispatchThreadID)
 {
     const uint pixelIndex = id.x;
-    const uint pixelX = pixelIndex % TextureWidth;
-    const uint pixelY = pixelIndex / TextureWidth;
+    uint pixelX = pixelIndex % TextureWidth;
+    uint pixelY = pixelIndex / TextureWidth;
     if (pixelX >= TextureWidth || pixelY >= TextureHeight)
     {
         return;
     }
 
+    //pixelY = TextureHeight - pixelY - 1;
+
     float4 texel = Texture.Load(int3(pixelX, pixelY, 0));
-    uint writeIndex = pixelIndex + Offset;
+    uint writeIndex = pixelIndex + TextureDataOffset;
 
     uint r = (uint)(texel.r * 255.0f) & 0xff;
     uint g = (uint)(texel.g * 255.0f) & 0xff;

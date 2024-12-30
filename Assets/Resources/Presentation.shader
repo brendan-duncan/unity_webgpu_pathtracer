@@ -1,8 +1,6 @@
 Shader "Hidden/PathTracer/Presentation"
 {
-
     CGINCLUDE
-        #pragma target 4.5
         #include "util/tonemap.hlsl"
   
         struct Attributes
@@ -20,6 +18,7 @@ Shader "Hidden/PathTracer/Presentation"
         sampler2D _MainTex;
         float Exposure;
         int Mode;
+        bool sRGB;
 
         Varyings VertBlit(Attributes v)
         {
@@ -30,7 +29,7 @@ Shader "Hidden/PathTracer/Presentation"
         }
 
         half4 FragBlit(Varyings i) : SV_Target
-        {
+        {           
             float3 color = tex2D(_MainTex, i.uv).rgb;
             if (Exposure > 0.0f)
             {
@@ -38,21 +37,25 @@ Shader "Hidden/PathTracer/Presentation"
             }
             switch (Mode)
             {
-                case 0:
+                case 1:
                     color = Aces(color);
                     break;
-                case 1:
+                case 2:
                     color = Filmic(color);
                     break;
-                case 2:
+                case 3:
                     color = Reinhard(color);
                     break;
-                default:
+                case 4:
                     color = Lottes(color);
                     break;
             }
-            float3 srgb = pow(color, 1.0f / 2.2f);
-            return half4(srgb, 1.0f);
+            if (sRGB)
+            {
+                float3 srgb = pow(color, 1.0f / 2.2f);
+                return half4(srgb, 1.0f);
+            }
+            return half4(color, 1.0f);
         }
     ENDCG
 

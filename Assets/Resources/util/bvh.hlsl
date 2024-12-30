@@ -21,6 +21,11 @@ StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;
 StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
+uint EmissiveTriangleCount = 0;
+/*StructuredBuffer<uint2> EmissiveTriangles;
+StructuredBuffer<uint2> EmissiveAliasTable;
+StructuredBuffer<BHVNode> EmissiveBVHNodes;*/
+
 bool BackfaceCulling;
 
 // Stack size for BVH traversal
@@ -147,20 +152,27 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
                 
                 if (d > 0.0001f && d < hit.distance)
                 {
-                    hit.barycentric = float2(u, v);
-                    hit.triIndex = asuint(BVHTris[triAddr].w);
-
+                    uint triIndex = asuint(BVHTris[triAddr].w);
+                    float2 barycentric = float2(u, v);
+                    TriangleAttributes triAttr = TriangleAttributesBuffer[triIndex];
+                    float3 normal = normalize(InterpolateAttribute(barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
                     if (!BackfaceCulling)
                     {
+                        hit.normal = normal;                       
+                        hit.barycentric = barycentric;
+                        hit.triAddr = triAddr;
+                        hit.triIndex = triIndex;
                         hit.distance = d;
                     }
                     else
                     {
-                        TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
-                        hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
                         // Skip the back face of the triangle
-                        if (dot(hit.normal, ray.direction) < 0.0f)
+                        if (dot(normal, ray.direction) < 0.0f)
                         {
+                            hit.normal = normal;
+                            hit.barycentric = barycentric;
+                            hit.triAddr = triAddr;
+                            hit.triIndex = triIndex;
                             hit.distance = d;
                         }
                     }
@@ -256,13 +268,23 @@ RayHit RayIntersectBvh(const Ray ray)
     if (hit.distance < FarPlane)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
-        hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
         hit.position = ray.origin + hit.distance * ray.direction;
         hit.material = Materials[triAttr.materialIndex];
+        hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+        hit.tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
     }
     
     return hit;
+}
+
+float3 GetGeometricNormal(RayHit hit)
+{
+    float3 v0 = BVHTris[hit.triAddr].xyz;
+    float3 e1 = BVHTris[hit.triAddr + 1].xyz - v0;
+    float3 e2 = BVHTris[hit.triAddr + 2].xyz - v0;
+    
+    return normalize(cross(e1, e2));
 }
 
 #endif // __UNITY_PATHTRACER_BVH_HLSL__

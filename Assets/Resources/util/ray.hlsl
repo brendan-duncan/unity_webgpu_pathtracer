@@ -14,9 +14,11 @@ struct RayHit
     float distance;
     float2 barycentric;
     uint triIndex;
+    uint triAddr;
     uint steps;
     float3 position;
     float3 normal;
+    float3 tangent;
     float2 uv;
     Material material;
 };

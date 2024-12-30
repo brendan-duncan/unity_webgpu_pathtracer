@@ -3,6 +3,7 @@
 #pragma multi_compile __ HAS_INDEX_BUFFER
 #pragma multi_compile __ HAS_32_BIT_INDICES
 #pragma multi_compile __ HAS_NORMALS
+#pragma multi_compile __ HAS_TANGENTS
 #pragma multi_compile __ HAS_UVS
 
 #include "util/triangle_attributes.hlsl"
@@ -15,6 +16,7 @@ ByteAddressBuffer IndexBuffer;
 uint VertexStride;
 uint PositionOffset;
 uint NormalOffset;
+uint TangentOffset;
 uint UVOffset;
 uint MaterialIndex;
 
@@ -37,6 +39,13 @@ float3 ReadVertexNormal(uint vertexIndex)
     uint readIndex = (vertexIndex * VertexStride) + NormalOffset;
     uint3 normalData = VertexBuffer.Load3(readIndex);
     return asfloat(normalData);
+}
+
+float3 ReadVertexTangent(uint vertexIndex)
+{
+    uint readIndex = (vertexIndex * VertexStride) + TangentOffset;
+    uint3 tangentData = VertexBuffer.Load3(readIndex);
+    return asfloat(tangentData);
 }
 
 float2 ReadVertexUV(uint vertexIndex)
@@ -103,6 +112,17 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
         attr.normal0 = mul(LocalToWorld, float4(attr.normal0.xyz, 0)).xyz;
         attr.normal1 = mul(LocalToWorld, float4(attr.normal1.xyz, 0)).xyz;
         attr.normal2 = mul(LocalToWorld, float4(attr.normal2.xyz, 0)).xyz;
+    #endif
+
+    #if HAS_TANGENTS
+        attr.tangent0 = ReadVertexTangent(vertIndices.x);
+        attr.tangent1 = ReadVertexTangent(vertIndices.y);
+        attr.tangent2 = ReadVertexTangent(vertIndices.z);
+    
+        // Transform normals to world space
+        attr.tangent0 = mul(LocalToWorld, float4(attr.tangent0.xyz, 0)).xyz;
+        attr.tangent1 = mul(LocalToWorld, float4(attr.tangent1.xyz, 0)).xyz;
+        attr.tangent2 = mul(LocalToWorld, float4(attr.tangent2.xyz, 0)).xyz;
     #endif
 
     #if HAS_UVS

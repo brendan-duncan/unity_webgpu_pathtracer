@@ -3,14 +3,15 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 public enum TonemapMode {
-    Aces = 0,
-    Filmic = 1,
-    Reinhard = 2,
-    Lottes = 3
+    None = 0,
+    Aces = 1,
+    Filmic = 2,
+    Reinhard = 3,
+    Lottes = 4
 }
 
-public enum SkyMode {
-    Basic,
+public enum EnvironmentMode {
+    Standard,
     Physical
 }
 
@@ -21,11 +22,15 @@ public class PathTracer : MonoBehaviour
     public float folalLength = 10.0f;
     public float aperature = 0.0f;
     public float skyTurbidity = 1.0f;
-    public SkyMode skyMode = SkyMode.Basic;
+    public EnvironmentMode environmentMode = EnvironmentMode.Standard;
+    public float environmentIntensity = 1.0f;
+    public Texture2D environmentTexture;
     public float exposureStops = 2.0f;
     public TonemapMode tonemapMode = TonemapMode.Lottes;
+    public bool sRGB = true;
 
-    LocalKeyword hasTexturesKeyword;        
+    LocalKeyword hasTexturesKeyword;
+    LocalKeyword hasEnvironmentTextureKeyword;
 
     Camera sourceCamera;
     BVHScene bvhScene;
@@ -42,6 +47,7 @@ public class PathTracer : MonoBehaviour
 
     ComputeBuffer skyStateBuffer;
     SkyState skyState;
+    ComputeBuffer environmentCdfBuffer;
     
     int currentRT = 0;
     int currentSample = 0;
@@ -68,8 +74,9 @@ public class PathTracer : MonoBehaviour
         presentationMaterial = new Material(presentationShader);
 
         hasTexturesKeyword = pathTracerShader.keywordSpace.FindKeyword("HAS_TEXTURES");
+        hasEnvironmentTextureKeyword = pathTracerShader.keywordSpace.FindKeyword("HAS_ENVIRONMENT_TEXTURE");
 
-        bool hasLight = false;
+        //bool hasLight = false;
 
         Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
         foreach (Light light in lights)
@@ -78,7 +85,7 @@ public class PathTracer : MonoBehaviour
             {
                 lightDirection = -light.transform.forward;
                 lightColor = light.color * light.intensity;
-                hasLight = true;
+                //hasLight = true;
                 break;
             }
         }
@@ -90,6 +97,28 @@ public class PathTracer : MonoBehaviour
 
         skyState.Init(direction, groundAlbedo, skyTurbidity);
         skyState.UpdateBuffer(skyStateBuffer);
+
+        pathTracerShader.SetFloat("EnvironmentIntensity", environmentIntensity);
+
+        if (environmentTexture != null)
+        {
+            pathTracerShader.EnableKeyword(hasEnvironmentTextureKeyword);
+            pathTracerShader.SetTexture(0, "EnvironmentTexture", environmentTexture);
+
+            var pixelData = environmentTexture.GetPixelData<Color>(0);
+
+            environmentCdfBuffer = new ComputeBuffer(pixelData.Length, 4);
+            float[] cdf = new float[pixelData.Length];
+            float sum = 0.0f;
+            for (int i = 0; i < pixelData.Length; i++)
+            {
+                sum += pixelData[i].grayscale;
+                cdf[i] = sum;
+            }
+            environmentCdfBuffer.SetData(cdf);
+            pathTracerShader.SetBuffer(0, "EnvironmentCdf", environmentCdfBuffer);
+            pathTracerShader.SetFloat("EnvironmentCdfSum", sum);
+        }
     }
 
     void OnDestroy()
@@ -101,6 +130,7 @@ public class PathTracer : MonoBehaviour
         outputRT[1]?.Release();
         cmd?.Release();
         skyStateBuffer?.Release();
+        environmentCdfBuffer?.Release();
     }
 
     void Update()
@@ -189,6 +219,7 @@ public class PathTracer : MonoBehaviour
         presentationMaterial.SetInt("OutputHeight", outputHeight);
         presentationMaterial.SetFloat("Exposure", exposureStops);
         presentationMaterial.SetInt("Mode", (int)tonemapMode);
+        presentationMaterial.SetInt("sRGB", sRGB ? 1 : 0);
 
         // Overwrite image with output from raytracer, applying tonemapping
         cmd.Blit(outputRT[currentRT], destination, presentationMaterial);
@@ -214,6 +245,6 @@ public class PathTracer : MonoBehaviour
         cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", outputRT[1 - currentRT]);
         cmd.SetComputeBufferParam(shader, 0, "RNGStateBuffer", rngStateBuffer);
         cmd.SetComputeBufferParam(shader, 0, "SkyStateBuffer", skyStateBuffer);
-        cmd.SetComputeIntParam(shader, "SkyMode", (int)skyMode);
+        cmd.SetComputeIntParam(shader, "EnvironmentMode", (int)environmentMode);
     }
 }

@@ -3,7 +3,15 @@
 
 #include "common.hlsl"
 
-int SkyMode;
+int EnvironmentMode;
+float EnvironmentIntensity;
+
+#if HAS_ENVIRONMENT_TEXTURE
+Texture2D<float4> EnvironmentTexture;
+SamplerState samplerEnvironmentTexture;
+StructuredBuffer<float> EnvironmentCDF;
+float EnvironmentCdfSum;
+#endif
 
 #define TERRESTRIAL_SOLAR_RADIUS (0.255f * DEGREES_TO_RADIANS)
 #define SOLAR_COS_THETA_MAX cos(TERRESTRIAL_SOLAR_RADIUS)
@@ -11,8 +19,16 @@ int SkyMode;
 
 float3 BackgroundColor(float3 rayDirection)
 {
+#if HAS_ENVIRONMENT_TEXTURE
+    float2 longlat = float2(atan2(rayDirection.x, rayDirection.z) + PI, acos(-rayDirection.y));
+    float2 uv = longlat / float2(2.0 * PI, PI);
+    uv.x = fmod(abs(uv.x), 1.0f);
+    uv.y = fmod(abs(uv.y), 1.0f);
+    return EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
+#else
     float yHeight = 0.5f * (-rayDirection.y + 1.0f);
-    return (1.0f - yHeight) * float3(1.0f, 1.0f, 1.0f) + yHeight * float3(0.5f, 0.7f, 1.0f);
+    return ((1.0f - yHeight) * float3(1.0f, 1.0f, 1.0f) + yHeight * float3(0.5f, 0.7f, 1.0f));
+#endif
 }
 
 // From https://github.com/Nelarius/rayfinder
@@ -43,8 +59,12 @@ float3 DirectionInCone(float2 u, float cosThetaMax)
 float3 SampleSolarDiskDirection(float2 u, float cosThetaMax, float3 sunDirection)
 {
     float3 v = DirectionInCone(u, cosThetaMax);
-    float3x3 onb = GetBasisMatrix(sunDirection);
-    float3 res = mul(onb, v);
+    //float3 X = 0.0f;
+    //float3 Y = 0.0f;
+    //GetONB(sunDirection, X, Y);
+    //float3 res = ToLocal(X, Y, sunDirection, v);
+    float3x3 onb = GetONB(sunDirection);
+    float3 res = ToLocal(onb, v);
     return res;
 }
 
@@ -76,27 +96,42 @@ float SkyRadiance(float theta, float gamma, uint channel)  {
     float radianceRhs = p2 + p3 * expM + p5 * rayM + p6 * mieM + p7 * zenith;
     float radianceDist = radianceLhs * radianceRhs;
 
-    return r * radianceDist;
+    return (r * radianceDist);
 }
 
 
-float3 SampleSkyRadiance(float3 direction)
+float3 SampleSkyRadiance(float3 direction, int rayDepth)
 {
-    if (SkyMode == 1)
+    float3 radiance = 0.0f;
+    if (EnvironmentMode == 1)
     {
         float3 sunDirection = SkyStateBuffer[0].sunDirection;
 
         float theta = acos(direction.y);
         float gamma = acos(clamp(dot(direction, sunDirection), -1.0, 1.0));
 
-        return float3(
+        radiance = float3(
             SkyRadiance(theta, gamma, 0),
             SkyRadiance(theta, gamma, 1),
             SkyRadiance(theta, gamma, 2)
         );
+
+        if (rayDepth == 0)
+        {
+            radiance *= 0.25f;
+        }
     }
-    
-    return BackgroundColor(direction);
+    else
+    {
+        radiance = BackgroundColor(direction);
+    }
+
+    if (rayDepth > 0)
+    {
+        radiance *= EnvironmentIntensity;
+    }
+
+    return radiance;
 }
 
 #endif // __UNITY_PATHTRACER_SKY_HLSL__

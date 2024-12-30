@@ -11,22 +11,22 @@ void rngNextInt(inout uint state)
     state = (word >> 22u) ^ word;
 }
 
-float rngNextFloat(inout uint state)
+float RandomFloat(inout uint state)
 {
     rngNextInt(state);
     return (float)state / (float)0xffffffffu;
 }
 
-float rngInRange(float min, float max, inout uint state) {
-    return min + rngNextFloat(state) * (max - min);
+float RandomRange(float min, float max, inout uint state) {
+    return min + RandomFloat(state) * (max - min);
 }
 
-float3 rngInSphere(inout uint state)
+float3 RandomSphere(inout uint state)
 {
     float3 p = float3(0.0f, 0.0f, 0.0f);
     do
     {
-        p = 2.0f * float3(rngNextFloat(state), rngNextFloat(state), rngNextFloat(state)) - float3(1.0f, 1.0f, 1.0f);
+        p = 2.0f * float3(RandomFloat(state), RandomFloat(state), RandomFloat(state)) - float3(1.0f, 1.0f, 1.0f);
     } while (length(p * p) > 1.0f);
 
     return p;
@@ -35,11 +35,15 @@ float3 rngInSphere(inout uint state)
 float3 RandomCosineHemisphere(float3 normal, inout uint state)
 {
     // See https://ameye.dev/notes/sampling-the-hemisphere/
-	float theta = acos(sqrt(rngNextFloat(state)));
-	float phi = 2.0f * PI * rngNextFloat(state);
+	float theta = acos(sqrt(RandomFloat(state)));
+	float phi = 2.0f * PI * RandomFloat(state);
 
-	float3x3 basis = GetBasisMatrix(normal);
-	return sin(theta) * (cos(phi) * basis[0] + sin(phi) * basis[1]) + cos(theta) * basis[2];
+    //float3 X = 0.0f;
+    //float3 Y = 0.0f;
+    //GetONB(normal, X, Y);
+	//return sin(theta) * (cos(phi) * X + sin(phi) * Y + cos(theta) * normal);
+    float3x3 onb = GetONB(normal);
+    return sin(theta) * (cos(phi) * onb[0] + sin(phi) * onb[1] + cos(theta) * onb[2]);
 }
 
 #endif // __UNITY_PATHTRACER_RANDOM_HLSL__

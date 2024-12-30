@@ -25,36 +25,170 @@ StructuredBuffer<TextureDescriptor> TextureDescriptors;
 StructuredBuffer<uint> TextureData;
 #endif
 
-float3 GetAlbedoColor(Material material, float2 uv)
+float4 GetTexturePixel(uint textureDataOffset, uint width, uint height, uint x, uint y)
+{
+#if HAS_TEXTURES
+    x = min(x, width - 1);
+    y = min(y, height - 1);
+
+    uint pixelOffset = textureDataOffset + (y * width + x);
+
+    uint pixelData = TextureData[pixelOffset];
+    float r = (pixelData & 0xFF) / 255.0f;
+    float g = ((pixelData >> 8) & 0xFF) / 255.0f;
+    float b = ((pixelData >> 16) & 0xFF) / 255.0f;
+    uint a = (pixelData >> 24) & 0xFF;
+    //r = pow(r, 2.2f);
+    //g = pow(g, 2.2f);
+    //b = pow(b, 2.2f);
+    if (a == 255)
+    {
+        return float4(r, g, b, 0.0f);
+    }
+    else if (a == 0)
+    {
+        return float4(r, g, b, 1.0f);
+    }
+    else
+    {
+        float t = (float)a / 255.0f;
+        return float4(r, g, b, 1.0f - t);
+    }
+#else
+    return float4(0.0f, 0.0f, 0.0f, 1.0f);
+#endif
+}
+
+float4 SampleTexture(int textureIndex, float2 uv, bool linearSample)
+{
+#if HAS_TEXTURES
+    if (textureIndex < 0)
+    {
+        return 0.0f;
+    }
+    else
+    {
+        uint offset = TextureDescriptors[textureIndex].offset;
+        uint width = TextureDescriptors[textureIndex].width;
+        uint height = TextureDescriptors[textureIndex].height;
+
+        uv.x = fmod(uv.x, 1.0f);
+        uv.y = fmod(uv.y, 1.0f);
+        if (uv.x < 0.0f)
+        {
+            uv.x += 1.0f;
+        }
+        if (uv.y < 0.0f)
+        {
+            uv.y += 1.0f;
+        }
+
+        float u = uv.x * (width - 1.0f);
+        float v = uv.y * (height - 1.0f);
+
+        uint x = (uint)(u);
+        uint y = (uint)(v);
+
+        float4 p1 = GetTexturePixel(offset, width, height, x, y);
+
+        if (!linearSample)
+        {
+            return p1;
+        }
+        else
+        {
+            float uFraction = u - x;
+            float vFraction = v - y;
+            float4 p2 = GetTexturePixel(offset, width, height, x + 1, y);
+            float4 p3 = GetTexturePixel(offset, width, height, x, y + 1);
+            float4 p4 = GetTexturePixel(offset, width, height, x + 1, y + 1);
+
+            float4 pixel = lerp(lerp(p1, p2, uFraction), lerp(p3, p4, uFraction), vFraction);
+
+            return pixel;
+        }
+    }
+#else
+    return 0.0f;
+#endif
+}
+
+float3 GetEmission(Material material, float2 uv)
+{
+    #if HAS_TEXTURES
+    if (material.textures.w < 0.0f)
+    {
+        return material.emission.rgb;
+    }
+    else
+    {
+        float4 pixel = SampleTexture((int)material.textures.w, uv, true);
+        return pixel.rgb;
+    }
+#else
+    return material.emission.rgb;
+#endif
+}
+
+float3 GetNormalMapSample(Material material, float2 uv)
+{
+#if HAS_TEXTURES
+    if (material.textures.z < 0.0f)
+    {
+        return float3(0.0f, 0.0f, 1.0f);
+    }
+    else
+    {
+        float4 pixel = SampleTexture((int)material.textures.z, uv, false);
+        return 2.0f * pixel.rgb - 1.0f;
+    }
+#else
+    return float3(0.0f, 0.0f, 1.0f);
+#endif
+}
+
+float2 GetMetallicRoughness(Material material, float2 uv)
+{
+#if HAS_TEXTURES
+    if (material.textures.y < 0.0f)
+    {
+        return material.metallicRoughness;
+    }
+    else
+    {
+        float4 pixel = SampleTexture((int)material.textures.y, uv, true);
+        return pixel.bg;
+    }
+#else
+    return material.metallicRoughness;
+#endif
+}
+
+float4 GetAlbedoTransmission(Material material, float2 uv)
 {
 #if HAS_TEXTURES
     if (material.textures.x < 0.0f)
     {
-        return material.albedoTransmission.rgb + material.emission.rgb;
+        return material.albedoTransmission;
     }
-    
-    uint textureIndex = (uint)material.textures.x;
-
-    uint offset = TextureDescriptors[textureIndex].offset;
-    uint width = TextureDescriptors[textureIndex].width;
-    uint height = TextureDescriptors[textureIndex].height;
-
-    uv.x = fmod(abs(uv.x), 1.0f);
-    uv.y = fmod(abs(uv.y), 1.0f);
-
-    uint x = (uint)(uv.x * (width - 1));
-    uint y = (uint)(uv.y * (height - 1));
-    uint pixelOffset = offset + (y * width + x);
-
-    uint pixelData = TextureData[pixelOffset];
-    uint r = (pixelData >> 0) & 0xFF;
-    uint g = (pixelData >> 8) & 0xFF;
-    uint b = (pixelData >> 16) & 0xFF;
-
-    return float3(r / 255.0f, g / 255.0f, b / 255.0f) + material.emission.rgb;
+    else
+    {  
+        float4 pixel = SampleTexture((int)material.textures.x, uv, true);
+        return pixel;
+    }
 #else
-    return material.albedoTransmission.rgb + material.emission.rgb;
+    return material.albedoTransmission;
 #endif
+}
+
+float3 GetAlbedoColor(Material material, float2 uv)
+{
+    return GetAlbedoTransmission(material, uv).rgb;
+}
+
+float GetTransmission(Material material, float2 uv)
+{
+    return GetAlbedoTransmission(material, uv).a;
 }
 
 #endif // __UNITY_PATHTRACER_MATERIAL_HLSL__
