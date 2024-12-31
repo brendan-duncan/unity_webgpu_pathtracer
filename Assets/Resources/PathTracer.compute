@@ -3,15 +3,11 @@
 #pragma multi_compile __ HAS_TEXTURES
 #pragma multi_compile __ HAS_ENVIRONMENT_TEXTURE
 
-#include "util/bvh.hlsl"
 #include "util/camera.hlsl"
 #include "util/common.hlsl"
-#include "util/disney.hlsl"
-#include "util/material.hlsl"
-//#include "util/monte_carlo.hlsl"
+#include "util/pathtrace.hlsl"
 #include "util/random.hlsl"
 #include "util/ray.hlsl"
-#include "util/sky.hlsl"
 
 int SamplesPerPass;
 
@@ -45,8 +41,7 @@ void PathTracer(uint3 id : SV_DispatchThreadID) {
 
         Ray ray = GetScreenRay(pixelCoordsSample);
 
-        //color += TraceRayMonteCarlo(ray, rngSeed);
-        color += TraceRayDisney(ray, rngSeed);
+        color += PathTrace(ray, rngSeed);
     }
 
     if (numSamples > 1)

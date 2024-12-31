@@ -1,6 +1,7 @@
 #ifndef __UNITY_PATHTRACER_CAMERA_HLSL__
 #define __UNITY_PATHTRACER_CAMERA_HLSL__
 
+#include "common.hlsl"
 #include "ray.hlsl"
 
 float4x4 CamToWorld;
