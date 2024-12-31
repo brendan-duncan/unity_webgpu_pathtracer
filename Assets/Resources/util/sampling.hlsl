@@ -117,14 +117,18 @@ float DielectricFresnel(float cosThetaI, float eta)
 
     // Total internal reflection
     if (sinThetaTSq > 1.0)
+    {
         return 1.0;
+    }
+    else
+    {
+        float cosThetaT = sqrt(max(1.0 - sinThetaTSq, 0.0));
 
-    float cosThetaT = sqrt(max(1.0 - sinThetaTSq, 0.0));
+        float rs = (eta * cosThetaT - cosThetaI) / (eta * cosThetaT + cosThetaI);
+        float rp = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
 
-    float rs = (eta * cosThetaT - cosThetaI) / (eta * cosThetaT + cosThetaI);
-    float rp = (eta * cosThetaI - cosThetaT) / (eta * cosThetaI + cosThetaT);
-
-    return 0.5f * (rs * rs + rp * rp);
+        return 0.5f * (rs * rs + rp * rp);
+    }
 }
 
 float3 CosineSampleHemisphere(float r1, float r2)

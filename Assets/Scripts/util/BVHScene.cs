@@ -263,7 +263,7 @@ public class BVHScene
             float ior = 
                 materials[i].HasProperty("_IOR") ? materials[i].GetFloat("_IOR")
                 : materials[i].HasProperty("ior") ? materials[i].GetFloat("ior")
-                : 1.0f;
+                : 1.1f;
 
             int mdi = i * materialSize;
 

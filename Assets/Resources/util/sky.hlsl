@@ -63,14 +63,11 @@ float2 BinarySearch(float value)
 #endif
 }
 
-float4 EvalEnvMap(Ray r)
+float4 EvalEnvMap(float3 r, float intensity)
 {
 #if HAS_ENVIRONMENT_TEXTURE
-    //float2 longlat = float2(atan2(rayDirection.x, rayDirection.z) + PI, acos(-rayDirection.y));
-    //float2 uv = longlat / float2(2.0 * PI, PI);
-
-    float theta = acos(clamp(r.direction.y, -1.0, 1.0));
-    float r_atan = atan2(r.direction.z, r.direction.x);
+    float theta = acos(clamp(r.y, -1.0, 1.0));
+    float r_atan = atan2(r.z, r.x);
     float2 uv = float2((PI + r_atan) * INV_TWO_PI, 1.0f - theta * INV_PI);// + float2(envMapRot, 0.0);
 
     uv.x = fmod(abs(uv.x), 1.0f);
@@ -78,8 +75,8 @@ float4 EvalEnvMap(Ray r)
 
     float3 color = EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
     float pdf = Luminance(color) / EnvironmentCdfSum;
-
-    return float4(color, (pdf * EnvironmentTextureWidth * EnvironmentTextureHeight) / (TWO_PI * PI * sin(theta)));
+    pdf = (pdf * EnvironmentTextureWidth * EnvironmentTextureHeight) / (TWO_PI * PI * sin(theta));
+    return float4(color * intensity, pdf);
 #else
   return 0.0f;
 #endif
@@ -109,24 +106,14 @@ float4 SampleEnvMap(inout float3 color, inout uint rngSeed)
 #endif
 }
 
-float3 BackgroundColor(float3 r)
+float4 BackgroundColor(float3 r, float intensity)
 {
 #if HAS_ENVIRONMENT_TEXTURE
-    /*float2 longlat = float2(atan2(rayDirection.x, rayDirection.z) + PI, acos(-rayDirection.y));
-    float2 uv = longlat / float2(2.0 * PI, PI);
-    uv.x = fmod(abs(uv.x), 1.0f);
-    uv.y = fmod(abs(uv.y), 1.0f);
-    return EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;*/
-    float theta = acos(clamp(r.y, -1.0, 1.0));
-    float2 uv = float2((float)(PI + atan2(r.z, r.x)) * INV_TWO_PI, 1.0f - theta * INV_PI);// + float2(envMapRot, 0.0);
-
-    uv.x = fmod(abs(uv.x), 1.0f);
-    uv.y = fmod(abs(uv.y), 1.0f);
-
-    return EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
+    return EvalEnvMap(r, rayDepth);
 #else
+    float pdf = 1.0f / (4.0f * PI);
     float yHeight = 0.5f * (-r.y + 1.0f);
-    return ((1.0f - yHeight) * float3(1.0f, 1.0f, 1.0f) + yHeight * float3(0.5f, 0.7f, 1.0f));
+    return float4(((1.0f - yHeight) * (float3)1.0f + yHeight * float3(0.5f, 0.7f, 1.0f)) * intensity, pdf);
 #endif
 }
 
@@ -194,35 +181,35 @@ float SkyRadiance(float theta, float gamma, uint channel)  {
 }
 
 
-float3 SampleSkyRadiance(float3 direction, int rayDepth)
+float4 SampleSkyRadiance(float3 direction, int rayDepth)
 {
-    float3 radiance = 0.0f;
+    float4 radiance = 0.0f;
     if (EnvironmentMode == 1)
     {
         float3 sunDirection = SkyStateBuffer[0].sunDirection;
 
         float theta = acos(direction.y);
         float gamma = acos(clamp(dot(direction, sunDirection), -1.0, 1.0));
-
-        radiance = float3(
-            SkyRadiance(theta, gamma, 0),
-            SkyRadiance(theta, gamma, 1),
-            SkyRadiance(theta, gamma, 2)
-        );
-
+        float pdf = SOLAR_INV_PDF;
+        float scale = 1.0f;
         if (rayDepth == 0)
-        {
-            radiance *= 0.25f;
-        }
+            scale = 0.25f; // The sky is a bit bright for display
+        else
+            scale = EnvironmentIntensity;
+
+        radiance = float4(
+            SkyRadiance(theta, gamma, 0) * scale,
+            SkyRadiance(theta, gamma, 1) * scale,
+            SkyRadiance(theta, gamma, 2) * scale,
+            pdf
+        );
     }
     else
     {
-        radiance = BackgroundColor(direction);
-    }
-
-    if (rayDepth > 0)
-    {
-        radiance *= EnvironmentIntensity;
+        float intensity = 1.0f;
+        if (rayDepth > 0)
+            intensity = EnvironmentIntensity;
+        radiance = BackgroundColor(direction, intensity);
     }
 
     return radiance;

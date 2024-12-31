@@ -231,30 +231,4 @@ float GetTransmission(Material material, float2 uv)
     return GetAlbedoTransmission(material, uv).a;
 }
 
-DisneyMaterial GetDisneyMaterial(Material material, float2 uv)
-{
-    DisneyMaterial disneyMaterial;
-    disneyMaterial.baseColor = GetAlbedoColor(material, uv);
-    disneyMaterial.opacity = 1.0f - material.albedoTransmission.a;
-    disneyMaterial.alphaMode = ALPHA_MODE_OPAQUE;
-    disneyMaterial.alphaCutoff = 0.0f;
-    disneyMaterial.emission = GetEmission(material, uv);
-    float2 metallicRoughness = GetMetallicRoughness(material, uv);
-    disneyMaterial.metallic = metallicRoughness.x;
-    disneyMaterial.roughness = metallicRoughness.y * metallicRoughness.y;
-    disneyMaterial.subsurface = 0.0f;
-    disneyMaterial.specularTint = 0.0f;
-    disneyMaterial.sheen = 0.0f;
-    disneyMaterial.sheenTint = 0.0f;
-    disneyMaterial.clearcoat = 0.0f;
-    disneyMaterial.clearcoatRoughness = 0.0f;
-    disneyMaterial.specTrans = material.albedoTransmission.a;
-    disneyMaterial.ior = material.ior;
-    disneyMaterial.anisotropic = 0.0f;
-    float aspect = sqrt(1.0 - disneyMaterial.anisotropic * 0.9);
-    disneyMaterial.ax = max(0.001, disneyMaterial.roughness / aspect);
-    disneyMaterial.ay = max(0.001, disneyMaterial.roughness * aspect);
-    return disneyMaterial;
-}
-
 #endif // __UNITY_PATHTRACER_MATERIAL_HLSL__

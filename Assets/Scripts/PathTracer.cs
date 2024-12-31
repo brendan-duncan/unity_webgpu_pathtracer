@@ -103,8 +103,6 @@ public class PathTracer : MonoBehaviour
         skyState.Init(direction, groundAlbedo, skyTurbidity);
         skyState.UpdateBuffer(skyStateBuffer);
 
-        pathTracerShader.SetFloat("EnvironmentIntensity", environmentIntensity);
-
         if (environmentTexture != null)
         {
             pathTracerShader.EnableKeyword(hasEnvironmentTextureKeyword);
@@ -156,6 +154,9 @@ public class PathTracer : MonoBehaviour
         if (!bvhScene.CanRender())
         {
             Graphics.Blit(source, destination);
+            //cmd.Blit(source, destination, presentationMaterial);
+            //Graphics.ExecuteCommandBuffer(cmd);
+            //cmd.Clear();
             return;
         }
 
@@ -241,6 +242,10 @@ public class PathTracer : MonoBehaviour
 
         Graphics.ExecuteCommandBuffer(cmd);
         cmd.Clear();
+
+        // Unity complains if destination is not set as the current render target,
+        // which doesn't happen using the command buffer.
+        Graphics.SetRenderTarget(destination);
     }
 
     void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
