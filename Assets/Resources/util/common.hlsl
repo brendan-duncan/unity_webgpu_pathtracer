@@ -90,5 +90,4 @@ float3 ToLocal(float3x3 basis, float3 world)
     return float3(dot(basis[0], world), dot(basis[1], world), dot(basis[2], world));
 }
 
-
 #endif // __UNITY_PATHTRACER_COMMON__

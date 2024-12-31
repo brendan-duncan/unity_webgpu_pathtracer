@@ -1,30 +1,44 @@
 #ifndef __UNITY_PATHTRACER_MATERIAL_HLSL__
 #define __UNITY_PATHTRACER_MATERIAL_HLSL__
 
-// size = 120 bytes
+#define ALPHA_MODE_OPAQUE 0
+#define ALPHA_MODE_BLEND 1
+#define ALPHA_MODE_MASK 2
+
+#define MEDIUM_NONE 0
+#define MEDIUM_ABSORB 1
+#define MEDIUM_SCATTER 2
+#define MEDIUM_EMISSIVE 3
+
+struct Medium
+{
+    float type;
+    float density;
+    float3 color;
+    float anisotropy;
+};
+
 struct DisneyMaterial
 {
-    float3 baseColor; // [0, 3]
-    float anisotropic; // 4
-    float3 emission; // [5, 7]
-    float metallic; // 8
-    float roughness; // 9
-    float subsurface; // 10
-    float specularTint; // 11
-    float sheen; // 12
-    float sheenTint; // 13
-    float clearcoat; // 14
-    float clearcoatRoguhness; // 15
-    float specTrans; // 16
-    float ior; // 17
-    float mediumType; // 18
-    float mediumDensity; // 19
-    float3 mediumColor; // [20, 22]
-    float mediumAnisotropy; // 23
-    float opacity; // 24
-    float alphaMode; // 25
-    float alphaCutoff; // 26
-    float4 textures; // [27, 30]
+    float3 baseColor;
+    float opacity;
+    float alphaMode;
+    float alphaCutoff;
+    float3 emission;
+    float anisotropic;
+    float metallic;
+    float roughness;
+    float subsurface;
+    float specularTint;
+    float sheen;
+    float sheenTint;
+    float clearcoat;
+    float clearcoatRoughness;
+    float specTrans;
+    float ior;
+    float ax;
+    float ay;
+    Medium medium;
 };
 
 struct Material
