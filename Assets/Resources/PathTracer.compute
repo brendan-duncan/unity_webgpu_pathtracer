@@ -23,7 +23,7 @@ void PathTracer(uint3 id : SV_DispatchThreadID) {
         return;
     }
 
-    int numSamples = max(1, SamplesPerPass);
+    const int numSamples = max(1, SamplesPerPass);
 
     const uint rayIndex = id.x;
     const uint pixelX = rayIndex % OutputWidth;
@@ -35,10 +35,9 @@ void PathTracer(uint3 id : SV_DispatchThreadID) {
 
     float3 color = 0.0f;
     //#if NUM_SAMPLES > 1
-    for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
-    //#else
-    //const int sampleIndex = 1;
+    //for (int sampleIndex = 0; sampleIndex < NUM_SAMPLES; ++sampleIndex)
     //#endif
+    for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
     {
         float2 randomSample = float2(RandomFloat(rngSeed), RandomFloat(rngSeed));
 
@@ -46,10 +45,11 @@ void PathTracer(uint3 id : SV_DispatchThreadID) {
 
         Ray ray = GetScreenRay(pixelCoordsSample);
 
-        //color += TraceRay(ray, rngSeed);
         color += TraceRayMonteCarlo(ray, rngSeed);
     }
-    color /= (float)numSamples;
+
+    if (numSamples > 1)
+        color /= (float)numSamples;
     //#if NUM_SAMPLES > 1
     //color /= (float)NUM_SAMPLES;
     //#endif
