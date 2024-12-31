@@ -12,9 +12,9 @@ float3 TraceRayMonteCarlo(Ray ray, inout uint rngSeed)
     float3 accumulatedColor = (float3)0.0f;
     float3 colorFactor = (float3)1.0f;
 
-    for (uint rayDepth = 0; rayDepth < MAX_RAY_BOUNCES; ++rayDepth)
+    for (uint rayDepth = 0; rayDepth < MaxRayBounces; ++rayDepth)
     {
-        RayHit hit = RayIntersectBvh(ray);
+        RayHit hit = RayIntersect(ray);
         bool didHit = hit.distance < FarPlane;
         if (didHit)
         {
@@ -85,7 +85,7 @@ float3 TraceRayMonteCarlo(Ray ray, inout uint rngSeed)
             //                transmission = 1 : vndf + transmission vndf
 
             float cosineSamplingWeight = (1.0f - metallic) * (1.0f - transmission);
-            float lightSamplingWeight = (1.0f - metallic) * (1.0f - transmission) * 0.0f;//Select(0.0f, 1.0f, EmissiveTriangleCount > 0u);
+            float lightSamplingWeight = 0.0f;//(1.0f - metallic) * (1.0f - transmission) * Select(0.0f, 1.0f, EmissiveTriangleCount > 0u);
             float vndfSamplingWeight = 1.0f - (1.0f - metallic) * roughness;
             float vndfTransmissionWeight = transmission;
 
@@ -104,26 +104,17 @@ float3 TraceRayMonteCarlo(Ray ray, inout uint rngSeed)
             {
                 newRay.direction = RandomCosineHemisphere(shadingNormal, rngSeed);
             }
-            /*else if (strategyPick < (cosineSamplingWeight + lightSamplingWeight))
+            else if (strategyPick < (cosineSamplingWeight + lightSamplingWeight))
             {
                 newRay.direction = SampleVNDF(shadingNormal, -ray.direction, roughness, rngSeed);
-            }*/
+            }
             else if (strategyPick < (cosineSamplingWeight + lightSamplingWeight + vndfSamplingWeight))
             {
-                //newRay.direction = normalize(reflect(ray.direction, shadingNormal));
                 newRay.direction = SampleTransmissionVNDF(shadingNormal, -ray.direction, roughness, rngSeed);
-                /*if (isnan(newRay.direction.x) || isnan(newRay.direction.y) || isnan(newRay.direction.z))
-                {
-                    return float3(1.0f, 0.0f, 1.0f);
-                }
-                bool isZero = abs(1.0f - length(newRay.direction)) < 0.01f;
-                if (isZero)
-                    return float3(1.0f, 0.0f, 0.0f);
-                else
-                    return float3(0.0f, 1.0f, 0.0f);*/
             }
             else
             {
+                //newRay.direction = RandomCosineHemisphere(shadingNormal, rngSeed);
                 newRay.direction = SampleTransmissionVNDF(shadingNormal, -ray.direction, roughness, rngSeed);
                 //newRay.direction = RandomCosineHemisphere(shadingNormal, rngSeed);
                 /*float lightPick = (float)emissiveTriangles.count.x * RandomFloat(rngSeed);

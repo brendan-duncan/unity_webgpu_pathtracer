@@ -8,12 +8,12 @@
 
 float3 TraceRay(Ray ray, inout uint rngSeed)
 {
-    int rayBounces = 0;
+    uint rayBounces = 0;
     float3 color = (float3)1.0f;
 
-    while (rayBounces < MAX_RAY_BOUNCES)
+    while (rayBounces < MaxRayBounces)
     {
-        RayHit hit = RayIntersectBvh(ray);
+        RayHit hit = RayIntersect(ray);
         bool didHit = hit.distance < FarPlane;
         if (didHit)
         {

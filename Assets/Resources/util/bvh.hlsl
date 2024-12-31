@@ -134,22 +134,22 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
     
     float3 r = cross(ray.direction.xyz, e2);
     float a = dot(e1, r);
-            
+
     if (abs(a) > 0.0000001f)
     {
         float f = 1.0f / a;
         float3 s = ray.origin.xyz - v0;
         float u = f * dot(s, r);
-        
+
         if (u >= 0.0f && u <= 1.0f)
         {
             float3 q = cross(s, e1);
             float v = f * dot(ray.direction.xyz, q);
-            
+
             if (v >= 0.0f && u + v <= 1.0f)
             {
                 float d = f * dot(e2, q);
-                
+
                 if (d > 0.0001f && d < hit.distance)
                 {
                     uint triIndex = asuint(BVHTris[triAddr].w);
@@ -182,7 +182,7 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
     }
 }
 
-RayHit RayIntersectBvh(const Ray ray)
+RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
 {
     RayHit hit = (RayHit)0;
     hit.distance = FarPlane;
@@ -208,14 +208,14 @@ RayHit RayIntersectBvh(const Ray ray)
             uint mask = nodeGroup.y;
             uint childBitIndex = firstbithigh(mask);
             uint childNodeBaseIndex = nodeGroup.x;
-            
+
             nodeGroup.y &= ~(1 << childBitIndex);
             if (nodeGroup.y > 0x00FFFFFF) 
             { 
                 // Push onto stack
                 stack[stackPtr++] = nodeGroup;
             }
-            
+
             uint slotIndex = (childBitIndex - 24) ^ (octinv4 & 255);
             uint relativeIndex = countbits(mask & ~(0xFFFFFFFF << slotIndex));
             uint childNodeIndex = childNodeBaseIndex + relativeIndex;
@@ -234,20 +234,20 @@ RayHit RayIntersectBvh(const Ray ray)
             triGroup = nodeGroup;
             nodeGroup = uint2(0, 0);
         }
-        
+
         // Process all triangles in the current group
         while (triGroup.y != 0)
         {
             count += 4;
             int triangleIndex = firstbithigh(triGroup.y);
             int triAddr = triGroup.x + (triangleIndex * 3);
-            
+
             // Check intersection and update hit if its closer
             IntersectTriangle(triAddr, ray, hit);
-            
+
             triGroup.y -= 1 << triangleIndex;
         }
-        
+
         if (nodeGroup.y <= 0x00FFFFFF)
         {
             if (stackPtr > 0) 
@@ -265,7 +265,7 @@ RayHit RayIntersectBvh(const Ray ray)
 
     hit.steps = count;
 
-    if (hit.distance < FarPlane)
+    if (!isShadowRay && hit.distance < FarPlane)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
         hit.position = ray.origin + hit.distance * ray.direction;
@@ -287,9 +287,14 @@ float3 GetGeometricNormal(RayHit hit)
     return normalize(cross(e1, e2));
 }
 
+RayHit RayIntersect(Ray ray)
+{
+    return RayIntersectBvh(ray, false);
+}
+
 float ShadowRay(const Ray ray)
 {
-    RayHit hit = RayIntersectBvh(ray);
+    RayHit hit = RayIntersectBvh(ray, true);
     if (hit.distance < FarPlane)
     {
         return 0.0f;

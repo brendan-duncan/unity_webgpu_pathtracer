@@ -1,11 +1,20 @@
 #ifndef __UNITY_PATHTRACER_COMMON__
 #define __UNITY_PATHTRACER_COMMON__
 
-#define PI  3.14159265359f
+#define PI         3.14159265358979323
+#define INV_PI     0.31830988618379067
+#define TWO_PI     6.28318530717958648
+#define INV_TWO_PI 0.15915494309189533
+#define INV_4_PI   0.07957747154594766
+
 #define DEGREES_TO_RADIANS (PI / 180.0f)
 
-#define MAX_RAY_BOUNCES 5
+float Luminance(float3 color)
+{
+    return dot(color, float3(0.299f, 0.587f, 0.114f));
+}
 
+uint MaxRayBounces;
 uint TotalRays;
 uint CurrentSample;
 float FarPlane;

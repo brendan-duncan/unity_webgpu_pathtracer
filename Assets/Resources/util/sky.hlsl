@@ -10,6 +10,8 @@ float EnvironmentIntensity;
 Texture2D<float4> EnvironmentTexture;
 SamplerState samplerEnvironmentTexture;
 StructuredBuffer<float> EnvironmentCDF;
+int EnvironmentTextureWidth;
+int EnvironmentTextureHeight;
 float EnvironmentCdfSum;
 #endif
 
@@ -17,16 +19,113 @@ float EnvironmentCdfSum;
 #define SOLAR_COS_THETA_MAX cos(TERRESTRIAL_SOLAR_RADIUS)
 #define SOLAR_INV_PDF (2.0f * PI * (1.0f - SOLAR_COS_THETA_MAX))
 
-float3 BackgroundColor(float3 rayDirection)
+float2 BinarySearch(float value)
 {
 #if HAS_ENVIRONMENT_TEXTURE
-    float2 longlat = float2(atan2(rayDirection.x, rayDirection.z) + PI, acos(-rayDirection.y));
+    int lower = 0;
+    int upper = EnvironmentTextureHeight - 1;
+    while (lower < upper)
+    {
+        int mid = (lower + upper) >> 1;
+        int idx = mid * EnvironmentTextureWidth + EnvironmentTextureWidth - 1;
+        if (value < EnvironmentCDF[idx])
+        {
+            upper = mid;
+        }
+        else
+        {
+            lower = mid + 1;
+        }
+    }
+
+    int y = clamp(lower, 0, EnvironmentTextureHeight - 1);
+
+    lower = 0;
+    upper = EnvironmentTextureWidth - 1;
+    while (lower < upper)
+    {
+        int mid = (lower + upper) >> 1;
+        int idx = y * EnvironmentTextureWidth + mid;
+        if (value < EnvironmentCDF[idx])
+        {
+            upper = mid;
+        }
+        else
+        {
+            lower = mid + 1;
+        }
+    }
+
+    int x = clamp(lower, 0, EnvironmentTextureWidth - 1);
+    return float2(x, y) / float2(EnvironmentTextureWidth, EnvironmentTextureHeight);
+#else
+  return 0.0f;
+#endif
+}
+
+float4 EvalEnvMap(Ray r)
+{
+#if HAS_ENVIRONMENT_TEXTURE
+    //float2 longlat = float2(atan2(rayDirection.x, rayDirection.z) + PI, acos(-rayDirection.y));
+    //float2 uv = longlat / float2(2.0 * PI, PI);
+
+    float theta = acos(clamp(r.direction.y, -1.0, 1.0));
+    float r_atan = atan2(r.direction.z, r.direction.x);
+    float2 uv = float2((PI + r_atan) * INV_TWO_PI, 1.0f - theta * INV_PI);// + float2(envMapRot, 0.0);
+
+    uv.x = fmod(abs(uv.x), 1.0f);
+    uv.y = fmod(abs(uv.y), 1.0f);
+
+    float3 color = EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
+    float pdf = Luminance(color) / EnvironmentCdfSum;
+
+    return float4(color, (pdf * EnvironmentTextureWidth * EnvironmentTextureHeight) / (TWO_PI * PI * sin(theta)));
+#else
+  return 0.0f;
+#endif
+}
+
+float4 SampleEnvMap(inout float3 color, inout uint rngSeed)
+{
+#if HAS_ENVIRONMENT_TEXTURE
+    float rnd = RandomFloat(rngSeed) * EnvironmentCdfSum;
+    float2 uv = BinarySearch(rnd);
+
+    color = EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
+    float pdf = Luminance(color) / EnvironmentCdfSum;
+
+    //uv.x -= envMapRot;
+    float phi = uv.x * TWO_PI;
+    float theta = uv.y * PI;
+
+    if (sin(theta) == 0.0)
+    {
+        pdf = 0.0;
+    }
+
+    return float4(-sin(theta) * cos(phi), cos(theta), -sin(theta) * sin(phi), (pdf * EnvironmentTextureWidth * EnvironmentTextureHeight) / (TWO_PI * PI * sin(theta)));
+#else
+  return 0.0f;
+#endif
+}
+
+float3 BackgroundColor(float3 r)
+{
+#if HAS_ENVIRONMENT_TEXTURE
+    /*float2 longlat = float2(atan2(rayDirection.x, rayDirection.z) + PI, acos(-rayDirection.y));
     float2 uv = longlat / float2(2.0 * PI, PI);
     uv.x = fmod(abs(uv.x), 1.0f);
     uv.y = fmod(abs(uv.y), 1.0f);
+    return EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;*/
+    float theta = acos(clamp(r.y, -1.0, 1.0));
+    float2 uv = float2((float)(PI + atan2(r.z, r.x)) * INV_TWO_PI, 1.0f - theta * INV_PI);// + float2(envMapRot, 0.0);
+
+    uv.x = fmod(abs(uv.x), 1.0f);
+    uv.y = fmod(abs(uv.y), 1.0f);
+
     return EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
 #else
-    float yHeight = 0.5f * (-rayDirection.y + 1.0f);
+    float yHeight = 0.5f * (-r.y + 1.0f);
     return ((1.0f - yHeight) * float3(1.0f, 1.0f, 1.0f) + yHeight * float3(0.5f, 0.7f, 1.0f));
 #endif
 }

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+using System;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -18,7 +18,9 @@ public enum EnvironmentMode {
 [RequireComponent(typeof(Camera))]
 public class PathTracer : MonoBehaviour
 {
+    public int samplesPerPass = 1;
     public int maxSamples = 100000;
+    public int maxRayBounces = 5;
     public bool backfaceCulling = false;
     public float folalLength = 10.0f;
     public float aperature = 0.0f;
@@ -119,6 +121,8 @@ public class PathTracer : MonoBehaviour
                 cdf[i] = sum;
             }
             environmentCdfBuffer.SetData(cdf);
+            pathTracerShader.SetInt("EnvironmentTextureWidth", environmentTexture.width);
+            pathTracerShader.SetInt("EnvironmentTextureHeight", environmentTexture.height);
             pathTracerShader.SetBuffer(0, "EnvironmentCdf", environmentCdfBuffer);
             pathTracerShader.SetFloat("EnvironmentCdfSum", sum);
         }
@@ -203,7 +207,7 @@ public class PathTracer : MonoBehaviour
                 uint[] rngStateData = new uint[totalRays];
                 for (int i = 0; i < totalRays; i++)
                 {
-                    rngStateData[i] = (uint)Random.Range(0, uint.MaxValue);
+                    rngStateData[i] = (uint)UnityEngine.Random.Range(0, uint.MaxValue);
                 }
                 rngStateBuffer.SetData(rngStateData);
             }
@@ -229,10 +233,10 @@ public class PathTracer : MonoBehaviour
         // Overwrite image with output from raytracer, applying tonemapping
         cmd.Blit(outputRT[currentRT], destination, presentationMaterial);
 
-        if (currentSample < maxSamples)
+        if (currentSample <= maxSamples)
         {
             currentRT = 1 - currentRT;
-            currentSample++;
+            currentSample += Math.Max(1, samplesPerPass);
         }
 
         Graphics.ExecuteCommandBuffer(cmd);
@@ -241,6 +245,8 @@ public class PathTracer : MonoBehaviour
 
     void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
     {
+        cmd.SetComputeIntParam(shader, "MaxRayBounces", Math.Max(maxRayBounces, 1));
+        cmd.SetComputeIntParam(shader, "SamplesPerPass", samplesPerPass);
         cmd.SetComputeIntParam(shader, "BackfaceCulling", backfaceCulling ? 1 : 0);
         cmd.SetComputeVectorParam(shader, "LightDirection", lightDirection);
         cmd.SetComputeVectorParam(shader, "LightColor", lightColor);

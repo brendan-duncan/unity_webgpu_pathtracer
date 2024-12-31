@@ -13,15 +13,17 @@
 #include "util/ray.hlsl"
 #include "util/sky.hlsl"
 
-#define NUM_SAMPLES 1
+int SamplesPerPass;
+
+//#define NUM_SAMPLES 1
 
 [numthreads(128, 1, 1)]
-void PathTracer(uint3 id : SV_DispatchThreadID)
-{
-    if (id.x >= TotalRays)
-    {
+void PathTracer(uint3 id : SV_DispatchThreadID) {
+    if (id.x >= TotalRays) {
         return;
     }
+
+    int numSamples = max(1, SamplesPerPass);
 
     const uint rayIndex = id.x;
     const uint pixelX = rayIndex % OutputWidth;
@@ -32,25 +34,26 @@ void PathTracer(uint3 id : SV_DispatchThreadID)
     uint rngSeed = RNGStateBuffer[pixelIndex];
 
     float3 color = 0.0f;
-    #if NUM_SAMPLES > 1
-    for (int sampleIndex = 0; sampleIndex < NUM_SAMPLES; ++sampleIndex)
-    #else
-    const int sampleIndex = 1;
-    #endif
-    {       
+    //#if NUM_SAMPLES > 1
+    for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
+    //#else
+    //const int sampleIndex = 1;
+    //#endif
+    {
         float2 randomSample = float2(RandomFloat(rngSeed), RandomFloat(rngSeed));
-        
+
         float2 pixelCoordsSample = pixelCoords + randomSample;
-        
+
         Ray ray = GetScreenRay(pixelCoordsSample);
 
         //color += TraceRay(ray, rngSeed);
         color += TraceRayMonteCarlo(ray, rngSeed);
     }
-    #if NUM_SAMPLES > 1
-    color /= (float)NUM_SAMPLES;
-    #endif
-    
+    color /= (float)numSamples;
+    //#if NUM_SAMPLES > 1
+    //color /= (float)NUM_SAMPLES;
+    //#endif
+
     float4 currentColor = AccumulatedOutput[pixelCoords];
     float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + 1.0f);
 
