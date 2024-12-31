@@ -31,10 +31,12 @@ Shader "Hidden/PathTracer/Presentation"
         half4 FragBlit(Varyings i) : SV_Target
         {           
             float3 color = tex2D(_MainTex, i.uv).rgb;
-            if (Exposure > 0.0f)
+            color *= Exposure;
+            /*if (Exposure > 0.0f)
             {
-                color *= 1.0f / exp2(Exposure);
-            }
+                color *= 1.0f / exp2(Exposure); // Exposure Stops
+            }*/
+
             switch (Mode)
             {
                 case 1:

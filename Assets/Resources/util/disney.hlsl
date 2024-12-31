@@ -400,39 +400,9 @@ float3 TraceRayDisney(Ray ray, inout uint rngSeed)
             // Gather radiance from envmap and use scatterSample.pdf from previous bounce for MIS
             if (rayDepth > 0)
                 misWeight = PowerHeuristic(scatterSample.pdf, skyColorPDf.w);
-
             if (misWeight > 0)
                 radiance += misWeight * skyColorPDf.rgb * throughput;
-
-            /*#if HAS_ENVIRONMENT_TEXTURE
-            float4 envMapColPdf = EvalEnvMap(ray);
-            float misWeight = 1.0;
-            // Gather radiance from envmap and use scatterSample.pdf from previous bounce for MIS
-            if (rayDepth > 0)
-            {
-                misWeight = PowerHeuristic(scatterSample.pdf, envMapColPdf.w);
-            }
-
-            if (misWeight > 0)
-            {
-                float intensity = 1.0f;
-                if (rayDepth > 0)
-                    intensity = EnvironmentIntensity;
-                radiance += misWeight * envMapColPdf.rgb * throughput * intensity;
-            }
-            #else
-            float misWeight = 1.0;
-            // Gather radiance from envmap and use scatterSample.pdf from previous bounce for MIS
-            if (rayDepth > 0)
-            {
-                float skyPDF = SampleSkyRadiancePDF(ray.direction, rayDepth);
-                misWeight = PowerHeuristic(scatterSample.pdf, skyPDF);
-            }
-
-            float3 skyRadiance = SampleSkyRadiance(ray.direction, rayDepth);
-            radiance += skyRadiance * throughput;
-            #endif
-            break;*/
+            break;
         }
 
         DisneyMaterial material = GetDisneyMaterial(ray, hit);

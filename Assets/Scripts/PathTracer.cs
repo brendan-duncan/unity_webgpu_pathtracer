@@ -28,9 +28,9 @@ public class PathTracer : MonoBehaviour
     public EnvironmentMode environmentMode = EnvironmentMode.Standard;
     public float environmentIntensity = 1.0f;
     public Texture2D environmentTexture;
-    public float exposureStops = 2.0f;
+    public float exposure = 1.0f;
     public TonemapMode tonemapMode = TonemapMode.Lottes;
-    public bool sRGB = true;
+    public bool sRGB = false;
 
     LocalKeyword hasTexturesKeyword;
     LocalKeyword hasEnvironmentTextureKeyword;
@@ -228,7 +228,7 @@ public class PathTracer : MonoBehaviour
         presentationMaterial.SetTexture("_MainTex", outputRT[currentRT]);
         presentationMaterial.SetInt("OutputWidth", outputWidth);
         presentationMaterial.SetInt("OutputHeight", outputHeight);
-        presentationMaterial.SetFloat("Exposure", exposureStops);
+        presentationMaterial.SetFloat("Exposure", exposure);
         presentationMaterial.SetInt("Mode", (int)tonemapMode);
         presentationMaterial.SetInt("sRGB", sRGB ? 1 : 0);
         // Overwrite image with output from raytracer, applying tonemapping

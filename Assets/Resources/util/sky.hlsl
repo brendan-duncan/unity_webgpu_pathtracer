@@ -70,8 +70,14 @@ float4 EvalEnvMap(float3 r, float intensity)
     float r_atan = atan2(r.z, r.x);
     float2 uv = float2((PI + r_atan) * INV_TWO_PI, 1.0f - theta * INV_PI);// + float2(envMapRot, 0.0);
 
-    uv.x = fmod(abs(uv.x), 1.0f);
-    uv.y = fmod(abs(uv.y), 1.0f);
+    //uv.x = fmod(abs(uv.x), 1.0f);
+    //uv.y = fmod(abs(uv.y), 1.0f);
+    uv.x = fmod(uv.x, 1.0f);
+    uv.y = fmod(uv.y, 1.0f);
+    if (uv.x < 0.0f)
+        uv.x += 1.0f;
+    if (uv.y < 0.0f)
+        uv.y += 1.0f;
 
     float3 color = EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
     float pdf = Luminance(color) / EnvironmentCdfSum;
@@ -109,7 +115,7 @@ float4 SampleEnvMap(inout float3 color, inout uint rngSeed)
 float4 BackgroundColor(float3 r, float intensity)
 {
 #if HAS_ENVIRONMENT_TEXTURE
-    return EvalEnvMap(r, rayDepth);
+    return EvalEnvMap(r, intensity);
 #else
     float pdf = 1.0f / (4.0f * PI);
     float yHeight = 0.5f * (-r.y + 1.0f);
