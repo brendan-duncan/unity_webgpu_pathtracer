@@ -21,7 +21,7 @@ struct RayHit
     float3 tangent;
     float2 uv;
     Material material;
-    //float eta;
+    float eta;
 };
 
 #endif // __UNITY_PATHTRACER_RAY_HLSL__

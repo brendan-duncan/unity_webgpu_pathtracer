@@ -6,6 +6,72 @@
 #include "common.hlsl"
 #include "material.hlsl"
 #include "sky.hlsl"
+#include "disney.hlsl"
+
+float3 TraceRayDisney(Ray ray, inout uint rngSeed)
+{
+    float3 radiance = 0.0f;
+    float3 throughput = 1.0f;
+
+    LightSampleRec lightSample = { (float3)0.0f, (float3)0.0f, (float3)0.0f, 0.0f, 0.0f };
+    ScatterSampleRec scatterSample = { (float3)0.0f, (float3)0.0f, 0.0f };
+
+    // For medium tracking
+    bool inMedium = false;
+    bool mediumSampled = false;
+    bool surfaceScatter = false;
+
+    const uint maxRayBounces = max(MaxRayBounces, 1u);
+    
+    for (uint rayDepth = 0; ; ++rayDepth)
+    {
+        RayHit hit = RayIntersect(ray);
+        bool didHit = hit.distance < FarPlane;
+
+        if (!didHit)
+        {
+            #if HAS_ENVIRONMENT_TEXTURE
+            float4 envMapColPdf = EvalEnvMap(ray);
+            float misWeight = 1.0;
+            // Gather radiance from envmap and use scatterSample.pdf from previous bounce for MIS
+            if (rayDepth > 0)
+                misWeight = PowerHeuristic(scatterSample.pdf, envMapColPdf.w);
+
+            if (misWeight > 0)
+                radiance += misWeight * envMapColPdf.rgb * throughput * EnvironmentIntensity;
+            #else
+            #endif
+            break;
+        }
+
+        DisneyMaterial material = GetDisneyMaterial(hit.material, hit.uv);
+
+        // Gather radiance from emissive objects. Emission from meshes is not importance sampled
+        radiance += material.emission * throughput;
+
+        if (rayDepth == maxRayBounces)
+            break;
+
+        surfaceScatter = true;
+
+        // Next event estimation
+        //radiance += DirectLight(ray, hit, true) * throughput;
+
+        // Sample BSDF for color and outgoing direction
+        //scatterSample.f = DisneySample(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngSeed);
+        scatterSample.f = DisneySample(hit, material, -ray.direction, hit.normal, scatterSample.L, scatterSample.pdf, rngSeed);
+        if (scatterSample.pdf > 0.0)
+            throughput *= scatterSample.f / scatterSample.pdf;
+        else
+            break;
+
+        // Move ray origin to hit point and set direction for next bounce
+        ray.direction = scatterSample.L;
+        ray.origin = hit.position + ray.direction * 0.0001f;
+    }
+
+    return radiance;
+}
 
 float3 TraceRayMonteCarlo(Ray ray, inout uint rngSeed)
 {
@@ -30,6 +96,9 @@ float3 TraceRayMonteCarlo(Ray ray, inout uint rngSeed)
             float metallic = metallicRoughness.x;
             float roughness = metallicRoughness.y;
             float ior = material.ior;
+
+            DisneyMaterial disneyMaterial = GetDisneyMaterial(material, hit.uv);
+            hit.eta = dot(ray.direction, hit.normal) < 0.0 ? (1.0 / material.ior) : material.ior;
 
             float3 geometricNormal = GetGeometricNormal(hit);
             float3 shadingNormal = hit.normal;

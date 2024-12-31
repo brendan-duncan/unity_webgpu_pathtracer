@@ -24,6 +24,22 @@ uint OutputHeight;
 RWTexture2D<float4> Output;
 Texture2D<float4> AccumulatedOutput;
 
+struct ScatterSampleRec
+{
+    float3 L;
+    float3 f;
+    float pdf;
+};
+
+struct LightSampleRec
+{
+    float3 normal;
+    float3 emission;
+    float3 direction;
+    float dist;
+    float pdf;
+};
+
 float Select(float f, float t, bool c)
 {
     if (c)

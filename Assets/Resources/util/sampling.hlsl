@@ -55,7 +55,7 @@ float3 SampleGGXVNDF(float3 V, float ax, float ay, float r1, float r2)
     float3 Vh = normalize(float3(ax * V.x, ay * V.y, V.z));
 
     float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
-    float3 T1 = lensq > 0 ? float3(-Vh.y, Vh.x, 0) * inversesqrt(lensq) : float3(1, 0, 0);
+    float3 T1 = lensq > 0 ? float3(-Vh.y, Vh.x, 0) * rsqrt(lensq) : float3(1, 0, 0);
     float3 T2 = cross(Vh, T1);
 
     float r = sqrt(r1);
@@ -249,7 +249,7 @@ float3 SampleHG(float3 V, float g, float r1, float r2)
     float sinPhi = sin(phi);
     float cosPhi = cos(phi);
 
-    float3x3 onb = GetOnb(V);
+    float3x3 onb = GetONB(V);
 
     return sinTheta * cosPhi * onb[0] + sinTheta * sinPhi * onb[1] + cosTheta * onb[2];
 }

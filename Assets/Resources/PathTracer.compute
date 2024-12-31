@@ -45,7 +45,8 @@ void PathTracer(uint3 id : SV_DispatchThreadID) {
 
         Ray ray = GetScreenRay(pixelCoordsSample);
 
-        color += TraceRayMonteCarlo(ray, rngSeed);
+        //color += TraceRayMonteCarlo(ray, rngSeed);
+        color += TraceRayDisney(ray, rngSeed);
     }
 
     if (numSamples > 1)
