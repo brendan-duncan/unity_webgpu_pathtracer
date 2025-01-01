@@ -4,7 +4,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-public static class Utilities
+internal static class Utilities
 {
     public struct DebugRay
     {

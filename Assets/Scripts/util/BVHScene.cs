@@ -36,11 +36,16 @@ public class BVHScene
     ComputeBuffer bvhNodes;
     ComputeBuffer bvhTris;
 
+    List<Material> materials = new List<Material>();
+
     // Struct sizes in bytes
     const int VertexPositionSize = 16;
     const int TriangleAttributeSize = 100;
     const int BVHNodeSize = 80;
     const int BVHTriSize = 16;
+    // Number of float/uint values in material.hlsl
+    const int materialSize = 28;
+    const int textureOffset = 24;
 
     public void Start()
     {
@@ -130,115 +135,9 @@ public class BVHScene
         }
     }
 
-    void ProcessMeshes()
+    public void UpdateMaterialData(bool updateTextures)
     {
-        totalVertexCount = 0;
-        totalTriangleCount = 0;
-
-        // Populate list of mesh renderers to trace against
-        meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
-
-        // Gather info on the meshes we'll be using
-        foreach (MeshRenderer renderer in meshRenderers)
-        {
-            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
-            if (mesh == null)
-            {
-                continue;
-            }
-
-            totalVertexCount += Utilities.GetTriangleCount(mesh) * 3;
-        }
-
-        if (totalVertexCount == 0)
-        {
-            Debug.LogError("No meshes found to process.");
-            return;
-        }
-
-        // Allocate buffers
-        vertexPositionBufferGPU = new ComputeBuffer(totalVertexCount, VertexPositionSize);
-        vertexPositionBufferCPU = new NativeArray<Vector4>(totalVertexCount * VertexPositionSize, Allocator.Persistent);
-        triangleAttributesBuffer = new ComputeBuffer(totalVertexCount / 3, TriangleAttributeSize);
-
-        List<Material> materials = new List<Material>();
-
-        // Pack each mesh into global vertex buffer via compute shader
-        // Note: this avoids the need for every mesh to have cpu read/write access.
-        foreach (MeshRenderer renderer in meshRenderers)
-        {
-            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
-            if (mesh == null)
-            {
-                continue;
-            }
-
-            Material material = renderer.material;
-            if (!materials.Contains(material))
-            {
-                materials.Add(material);
-            }
-            int materialIndex = materials.IndexOf(material);
-
-            Debug.Log("Processing mesh: " + renderer.gameObject.name);
-
-            GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
-            GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
-            
-            int triangleCount = Utilities.GetTriangleCount(mesh);
-
-            // Determine where in the Unity vertex buffer each vertex attribute is
-            int vertexStride, positionOffset, normalOffset, uvOffset, tangentOffset;
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out positionOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out normalOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out tangentOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out uvOffset, out vertexStride);
-
-            meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
-            if (indexBuffer != null)
-            {
-                meshProcessingShader.SetBuffer(0, "IndexBuffer", indexBuffer);
-            }
-            meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", vertexPositionBufferGPU);
-            meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", triangleAttributesBuffer);
-            meshProcessingShader.SetInt("VertexStride", vertexStride);
-            meshProcessingShader.SetInt("PositionOffset", positionOffset);
-            meshProcessingShader.SetInt("NormalOffset", normalOffset);
-            meshProcessingShader.SetInt("TangentOffset", tangentOffset);
-            meshProcessingShader.SetInt("UVOffset", uvOffset);
-            meshProcessingShader.SetInt("TriangleCount", triangleCount);
-            meshProcessingShader.SetInt("OutputTriangleStart", totalTriangleCount);
-            meshProcessingShader.SetInt("MaterialIndex", materialIndex);
-            meshProcessingShader.SetMatrix("LocalToWorld", renderer.localToWorldMatrix);
-
-            // Set keywords based on format/attributes of this mesh
-            meshProcessingShader.SetKeyword(has32BitIndicesKeyword, (mesh.indexFormat == IndexFormat.UInt32));
-            meshProcessingShader.SetKeyword(hasNormalsKeyword, mesh.HasVertexAttribute(VertexAttribute.Normal));
-            meshProcessingShader.SetKeyword(hasUVsKeyword, mesh.HasVertexAttribute(VertexAttribute.TexCoord0));
-            meshProcessingShader.SetKeyword(hasTangentsKeyword, mesh.HasVertexAttribute(VertexAttribute.Tangent));
-            meshProcessingShader.SetKeyword(hasIndexBufferKeyword, indexBuffer != null);
-
-            meshProcessingShader.Dispatch(0, Mathf.CeilToInt(triangleCount / 64.0f), 1, 1);
-
-            totalTriangleCount += triangleCount;
-
-            vertexBuffer?.Release();
-            indexBuffer?.Release();
-        }
-
-        Debug.Log("Meshes processed. Total triangles: " + totalTriangleCount);
-
-        // Number of float/uint values in material.hlsl
-        const int materialSize = 28;
-        const int textureOffset = 24;
-
         List<Texture> textures = new List<Texture>();
-
-        materialsBuffer = new ComputeBuffer(materials.Count, materialSize * 4);
-        textures.Clear();
-
-        Debug.Log("Total materials: " + materials.Count);
-
         float[] materialData = new float[materials.Count * materialSize];
         for (int i = 0; i < materials.Count; i++)
         {
@@ -299,8 +198,6 @@ public class BVHScene
 
             int mdi = i * materialSize;
             int mti = mdi + textureOffset;
-
-            Debug.Log("Material: " + materials[i].name + " metallic:" + metallic);
 
             materialData[mdi + 0] = baseColor.r; // data1
             materialData[mdi + 1] = baseColor.g;
@@ -407,67 +304,176 @@ public class BVHScene
         }
         materialsBuffer.SetData(materialData);
 
-        Debug.Log("Total Textures: " + textures.Count);
-
-        int totalTextureSize = 0;
-        foreach (Texture texture in textures)
+        if (updateTextures)
         {
-            int width = texture.width;
-            int height = texture.height;
-            int textureSize = width * height;
-            totalTextureSize += textureSize;
-        }
+            Debug.Log("Total Textures: " + textures.Count);
 
-        if (totalTextureSize > 0)
-        {
-            textureDataBuffer = new ComputeBuffer(totalTextureSize, 4);
-
-            textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
-
-            textureCopyShader.SetBuffer(0, "TextureData", textureDataBuffer);
-
-            uint[] textureDescriptorData = new uint[textures.Count * 4];
-            int ti = 0;
-            int textureDataOffset = 0;
-            int textureIndex = 0;
+            int totalTextureSize = 0;
             foreach (Texture texture in textures)
             {
                 int width = texture.width;
                 int height = texture.height;
-                int totalPixels = width * height;
-                bool hasAlpha = GraphicsFormatUtility.HasAlphaChannel(texture.graphicsFormat);
-
-                Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureDataOffset + " " + (totalPixels * 4) + " bytes");
-                textureIndex++;
-
-                textureDescriptorData[ti++] = (uint)width;
-                textureDescriptorData[ti++] = (uint)height;
-                textureDescriptorData[ti++] = (uint)textureDataOffset;
-                textureDescriptorData[ti++] = (uint)0;
-
-                textureCopyShader.SetTexture(0, "Texture", texture);
-                textureCopyShader.SetInt("TextureWidth", width);
-                textureCopyShader.SetInt("TextureHeight", height);
-                textureCopyShader.SetInt("TextureDataOffset", textureDataOffset);
-                textureCopyShader.SetInt("TextureHasAlpha", hasAlpha ? 1 : 0);
-
-                int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
-                textureCopyShader.Dispatch(0, dispatchX, 1, 1);
-
-                textureDataOffset += totalPixels;
+                int textureSize = width * height;
+                totalTextureSize += textureSize;
             }
-            
-            textureDescriptorBuffer.SetData(textureDescriptorData);
 
-            Debug.Log("Total texture data size: " + totalTextureSize * 16 + " bytes");
+            if (totalTextureSize > 0)
+            {
+                textureDataBuffer = new ComputeBuffer(totalTextureSize, 4);
+
+                textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
+
+                textureCopyShader.SetBuffer(0, "TextureData", textureDataBuffer);
+
+                uint[] textureDescriptorData = new uint[textures.Count * 4];
+                int ti = 0;
+                int textureDataOffset = 0;
+                int textureIndex = 0;
+                foreach (Texture texture in textures)
+                {
+                    int width = texture.width;
+                    int height = texture.height;
+                    int totalPixels = width * height;
+                    bool hasAlpha = GraphicsFormatUtility.HasAlphaChannel(texture.graphicsFormat);
+
+                    Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureDataOffset + " " + (totalPixels * 4) + " bytes");
+                    textureIndex++;
+
+                    textureDescriptorData[ti++] = (uint)width;
+                    textureDescriptorData[ti++] = (uint)height;
+                    textureDescriptorData[ti++] = (uint)textureDataOffset;
+                    textureDescriptorData[ti++] = (uint)0;
+
+                    textureCopyShader.SetTexture(0, "Texture", texture);
+                    textureCopyShader.SetInt("TextureWidth", width);
+                    textureCopyShader.SetInt("TextureHeight", height);
+                    textureCopyShader.SetInt("TextureDataOffset", textureDataOffset);
+                    textureCopyShader.SetInt("TextureHasAlpha", hasAlpha ? 1 : 0);
+
+                    int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
+                    textureCopyShader.Dispatch(0, dispatchX, 1, 1);
+
+                    textureDataOffset += totalPixels;
+                }
+                
+                textureDescriptorBuffer.SetData(textureDescriptorData);
+
+                Debug.Log("Total texture data size: " + totalTextureSize * 16 + " bytes");
+            }
+            else
+            {
+                textureDataBuffer?.Release();
+                textureDescriptorBuffer?.Release();
+                textureDataBuffer = null;
+                textureDescriptorBuffer = null;
+            }
         }
-        else
+    }
+
+    public void ProcessMeshes()
+    {
+        totalVertexCount = 0;
+        totalTriangleCount = 0;
+
+        // Populate list of mesh renderers to trace against
+        meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+
+        // Gather info on the meshes we'll be using
+        foreach (MeshRenderer renderer in meshRenderers)
         {
-            textureDataBuffer?.Release();
-            textureDescriptorBuffer?.Release();
-            textureDataBuffer = null;
-            textureDescriptorBuffer = null;
+            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+            if (mesh == null)
+            {
+                continue;
+            }
+
+            totalVertexCount += Utilities.GetTriangleCount(mesh) * 3;
         }
+
+        if (totalVertexCount == 0)
+        {
+            Debug.LogError("No meshes found to process.");
+            return;
+        }
+
+        // Allocate buffers
+        vertexPositionBufferGPU = new ComputeBuffer(totalVertexCount, VertexPositionSize);
+        vertexPositionBufferCPU = new NativeArray<Vector4>(totalVertexCount * VertexPositionSize, Allocator.Persistent);
+        triangleAttributesBuffer = new ComputeBuffer(totalVertexCount / 3, TriangleAttributeSize);
+
+        materials.Clear();
+
+        // Pack each mesh into global vertex buffer via compute shader
+        // Note: this avoids the need for every mesh to have cpu read/write access.
+        foreach (MeshRenderer renderer in meshRenderers)
+        {
+            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+            if (mesh == null)
+            {
+                continue;
+            }
+
+            Material material = renderer.material;
+            if (!materials.Contains(material))
+                materials.Add(material);
+
+            int materialIndex = materials.IndexOf(material);
+
+            Debug.Log("Processing mesh: " + renderer.gameObject.name);
+
+            GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
+            GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
+            
+            int triangleCount = Utilities.GetTriangleCount(mesh);
+
+            // Determine where in the Unity vertex buffer each vertex attribute is
+            int vertexStride, positionOffset, normalOffset, uvOffset, tangentOffset;
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out positionOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out normalOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out tangentOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out uvOffset, out vertexStride);
+
+            meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
+            if (indexBuffer != null)
+            {
+                meshProcessingShader.SetBuffer(0, "IndexBuffer", indexBuffer);
+            }
+            meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", vertexPositionBufferGPU);
+            meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", triangleAttributesBuffer);
+            meshProcessingShader.SetInt("VertexStride", vertexStride);
+            meshProcessingShader.SetInt("PositionOffset", positionOffset);
+            meshProcessingShader.SetInt("NormalOffset", normalOffset);
+            meshProcessingShader.SetInt("TangentOffset", tangentOffset);
+            meshProcessingShader.SetInt("UVOffset", uvOffset);
+            meshProcessingShader.SetInt("TriangleCount", triangleCount);
+            meshProcessingShader.SetInt("OutputTriangleStart", totalTriangleCount);
+            meshProcessingShader.SetInt("MaterialIndex", materialIndex);
+            meshProcessingShader.SetMatrix("LocalToWorld", renderer.localToWorldMatrix);
+
+            // Set keywords based on format/attributes of this mesh
+            meshProcessingShader.SetKeyword(has32BitIndicesKeyword, (mesh.indexFormat == IndexFormat.UInt32));
+            meshProcessingShader.SetKeyword(hasNormalsKeyword, mesh.HasVertexAttribute(VertexAttribute.Normal));
+            meshProcessingShader.SetKeyword(hasUVsKeyword, mesh.HasVertexAttribute(VertexAttribute.TexCoord0));
+            meshProcessingShader.SetKeyword(hasTangentsKeyword, mesh.HasVertexAttribute(VertexAttribute.Tangent));
+            meshProcessingShader.SetKeyword(hasIndexBufferKeyword, indexBuffer != null);
+
+            meshProcessingShader.Dispatch(0, Mathf.CeilToInt(triangleCount / 64.0f), 1, 1);
+
+            totalTriangleCount += triangleCount;
+
+            vertexBuffer?.Release();
+            indexBuffer?.Release();
+        }
+
+        Debug.Log("Meshes processed. Total triangles: " + totalTriangleCount);
+
+        List<Texture> textures = new List<Texture>();
+
+        materialsBuffer = new ComputeBuffer(materials.Count, materialSize * 4);
+
+        Debug.Log("Total materials: " + materials.Count);
+
+        UpdateMaterialData(true);
 
         // Initiate async readback of vertex buffer to pass to tinybvh to build
         readbackStartTime = DateTime.UtcNow;

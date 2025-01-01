@@ -80,7 +80,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - baseColorTexture:
-        m_Texture: {fileID: 2800000, guid: edc84c07fe9a73d499cfdea6e4c9916b, type: 3}
+        m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - emissiveTexture:
@@ -130,24 +130,31 @@ Material:
     - _ZWrite: 1
     - alphaCutoff: 0.5
     - anisotropic: 0
+    - anisotropicFactor: 0
     - clearCoat: 0
-    - clearCoatGloss: 1
-    - ior: 1.5
+    - clearCoatFactor: 0
+    - clearCoatGloss: 0
+    - ior: 1
     - metallic: 0
+    - metallicFactor: 0
+    - normalScale: 1
     - normalTextureStrength: 1
     - roughness: 0.5
+    - roughnessFactor: 0
     - sheen: 0
-    - sheenTint: 0.5
-    - specularFactor: 0.5
+    - sheenFactor: 0
+    - sheenTint: 0
+    - specularFactor: 0
     - specularTint: 0
     - specularTransmission: 0
     - subsurface: 0
+    - subsurfacefactor: 0
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _Emission: {r: 0, g: 0, b: 0, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - baseColorFactor: {r: 1, g: 1, b: 1, a: 1}
+    - baseColorFactor: {r: 0.5031611, g: 0.9716981, b: 0.42626378, a: 1}
     - emissiveFactor: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

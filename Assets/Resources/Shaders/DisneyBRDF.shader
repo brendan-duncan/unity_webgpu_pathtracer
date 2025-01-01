@@ -27,7 +27,7 @@ Shader "PathTracer/DisneyBRDF"
         sheenFactor ("Sheen", Range(0.0, 1.0)) = 0.0
         sheenTint ("Sheen Tint", Range(0.0, 1.0)) = 0.5
 
-        subsurfacefactor ("Subsurface", Range(0.0, 1.0)) = 0
+        subsurfaceFactor ("Subsurface", Range(0.0, 1.0)) = 0
 
         clearCoatFactor ("Clear Coat", Range(0.0, 1.0)) = 0.0
         clearCoatGloss ("Clear Coat Gloss", Range(0.0, 1.0)) = 1.0
@@ -64,10 +64,9 @@ Shader "PathTracer/DisneyBRDF"
         float specularTint;
         float sheenFactor;
         float sheenTint;
-        float subsurfacefactor;
+        float subsurfaceFactor;
         float clearCoatFactor;
         float clearCoatGloss;
-        float subsurfaceFactor;
         float ior;
 
         //sampler2D _AlbedoTex, _NormalTex, _TangentTex;

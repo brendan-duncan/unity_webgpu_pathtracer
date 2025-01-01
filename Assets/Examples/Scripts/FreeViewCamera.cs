@@ -30,7 +30,7 @@ public class FreeViewCamera : MonoBehaviour
             transform.eulerAngles = new Vector3(transform.eulerAngles.x, transform.eulerAngles.y, 0);
             if (pathTracer != null)
             {
-                pathTracer.ResetSamples();
+                pathTracer.Reset();
             }
         }
 
@@ -56,7 +56,7 @@ public class FreeViewCamera : MonoBehaviour
         {
             if (pathTracer != null)
             {
-                pathTracer.ResetSamples();
+                pathTracer.Reset();
             }
             transform.position += currentVelocity * Time.deltaTime;
         }

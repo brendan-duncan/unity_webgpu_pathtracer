@@ -148,9 +148,15 @@ public class PathTracer : MonoBehaviour
         pathTracerShader.SetKeyword(hasTexturesKeyword, bvhScene.HasTextures());
     }
 
-    public void ResetSamples()
+    public void Reset()
     {
         currentSample = 0;
+    }
+
+    public void UpdateMaterialData()
+    {
+        bvhScene.UpdateMaterialData(false);
+        Reset();
     }
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
@@ -158,9 +164,6 @@ public class PathTracer : MonoBehaviour
         if (!bvhScene.CanRender())
         {
             Graphics.Blit(source, destination);
-            //cmd.Blit(source, destination, presentationMaterial);
-            //Graphics.ExecuteCommandBuffer(cmd);
-            //cmd.Clear();
             return;
         }
 
@@ -187,17 +190,17 @@ public class PathTracer : MonoBehaviour
             {
                 skyState.Init(new float[] { lightDirection.x, lightDirection.y, lightDirection.z }, new float[] { 0.3f, 0.2f, 0.1f }, skyTurbidity);
                 skyState.UpdateBuffer(skyStateBuffer);
-                ResetSamples();
+                Reset();
             }
 
             // Prepare buffers and output texture
             if (Utilities.PrepareRenderTexture(ref outputRT[0], outputWidth, outputHeight, RenderTextureFormat.ARGBFloat))
             {
-                ResetSamples();
+                Reset();
             }
             if (Utilities.PrepareRenderTexture(ref outputRT[1], outputWidth, outputHeight, RenderTextureFormat.ARGBFloat))
             {
-                ResetSamples();
+                Reset();
             }
 
             if (rngStateBuffer != null && (rngStateBuffer.count != totalRays || currentSample == 0))

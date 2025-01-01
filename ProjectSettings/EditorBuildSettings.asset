@@ -6,13 +6,13 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 0
-    path: Assets/Scenes/Sponza.unity
+    path: Assets/Examples/Scenes/Sponza.unity
     guid: fba0b4dee83338f4587e8534f25da7c7
   - enabled: 0
-    path: Assets/Scenes/BasicScene.unity
+    path: Assets/Examples/Scenes/BasicScene.unity
     guid: 9fc0d4010bbf28b4594072e72b8655ab
   - enabled: 0
-    path: Assets/Scenes/CornellBox.unity
+    path: Assets/Examples/Scenes/CornellBox.unity
     guid: 6423b87da8f99ad448b16af10b7b75c0
   - enabled: 0
     path: Assets/Scenes/Sponza2.unity
