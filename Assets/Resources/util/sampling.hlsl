@@ -9,9 +9,12 @@ float GTR1(float NDotH, float a)
     {
         return INV_PI;
     }
-    float a2 = a * a;
-    float t = 1.0 + (a2 - 1.0) * NDotH * NDotH;
-    return (a2 - 1.0) / (PI * log(a2) * t);
+    else
+    {
+        float a2 = a * a;
+        float t = 1.0 + (a2 - 1.0) * NDotH * NDotH;
+        return (a2 - 1.0) / (PI * log(a2) * t);
+    }
 }
 
 float3 SampleGTR1(float rgh, float r1, float r2)

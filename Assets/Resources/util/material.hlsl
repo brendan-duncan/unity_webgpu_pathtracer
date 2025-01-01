@@ -1,53 +1,14 @@
 #ifndef __UNITY_PATHTRACER_MATERIAL_HLSL__
 #define __UNITY_PATHTRACER_MATERIAL_HLSL__
 
-#define ALPHA_MODE_OPAQUE 0
-#define ALPHA_MODE_BLEND 1
-#define ALPHA_MODE_MASK 2
-
-#define MEDIUM_NONE 0
-#define MEDIUM_ABSORB 1
-#define MEDIUM_SCATTER 2
-#define MEDIUM_EMISSIVE 3
-
-/*struct Medium
-{
-    float type;
-    float density;
-    float3 color;
-    float anisotropy;
-};*/
-
-struct DisneyMaterial
-{
-    float3 baseColor;
-    float opacity;
-    float alphaMode;
-    float alphaCutoff;
-    float3 emission;
-    float anisotropic;
-    float metallic;
-    float roughness;
-    float subsurface;
-    float specularTint;
-    float sheen;
-    float sheenTint;
-    float clearcoat;
-    float clearcoatRoughness;
-    float specTrans;
-    float ior;
-    float ax;
-    float ay;
-    //Medium medium;
-};
-
 struct Material
 {
-    float4 albedoTransmission;
-    float4 emission;
-    float2 metallicRoughness;
-    float mode;
-    float ior;
+    float4 data1;
+    float4 data2;
+    float4 data3;
+    float4 data4;
+    float4 data5;
+    float4 data6;
     float4 textures;
 };
 StructuredBuffer<Material> Materials;
@@ -77,23 +38,8 @@ float4 GetTexturePixel(uint textureDataOffset, uint width, uint height, uint x, 
     float r = (pixelData & 0xFF) / 255.0f;
     float g = ((pixelData >> 8) & 0xFF) / 255.0f;
     float b = ((pixelData >> 16) & 0xFF) / 255.0f;
-    uint a = (pixelData >> 24) & 0xFF;
-    //r = pow(r, 2.2f);
-    //g = pow(g, 2.2f);
-    //b = pow(b, 2.2f);
-    if (a == 255)
-    {
-        return float4(r, g, b, 0.0f);
-    }
-    else if (a == 0)
-    {
-        return float4(r, g, b, 1.0f);
-    }
-    else
-    {
-        float t = (float)a / 255.0f;
-        return float4(r, g, b, 1.0f - t);
-    }
+    float a = ((pixelData >> 24) & 0xFF) / 255.0f;
+    return float4(r, g, b, a);
 #else
     return float4(0.0f, 0.0f, 0.0f, 1.0f);
 #endif
@@ -158,7 +104,7 @@ float3 GetEmission(Material material, float2 uv)
     #if HAS_TEXTURES
     if (material.textures.w < 0.0f)
     {
-        return material.emission.rgb;
+        return material.data2.rgb;
     }
     else
     {
@@ -166,7 +112,7 @@ float3 GetEmission(Material material, float2 uv)
         return pixel.rgb;
     }
 #else
-    return material.emission.rgb;
+    return material.data2.rgb;
 #endif
 }
 
@@ -192,43 +138,32 @@ float2 GetMetallicRoughness(Material material, float2 uv)
 #if HAS_TEXTURES
     if (material.textures.y < 0.0f)
     {
-        return material.metallicRoughness;
+        return material.data3.rg;
     }
     else
     {
         float4 pixel = SampleTexture((int)material.textures.y, uv, true);
-        return pixel.bg;
+        return float2(pixel.b, pixel.g * pixel.g);
     }
 #else
-    return material.metallicRoughness;
+    return material.data3.rg;
 #endif
 }
 
-float4 GetAlbedoTransmission(Material material, float2 uv)
+float4 GetBaseColorOpacity(Material material, float2 uv)
 {
 #if HAS_TEXTURES
     if (material.textures.x < 0.0f)
     {
-        return material.albedoTransmission;
+        return material.data1;
     }
     else
     {  
-        float4 pixel = SampleTexture((int)material.textures.x, uv, true);
-        return pixel;
+        return SampleTexture((int)material.textures.x, uv, true);
     }
 #else
-    return material.albedoTransmission;
+    return material.data1;
 #endif
-}
-
-float3 GetAlbedoColor(Material material, float2 uv)
-{
-    return GetAlbedoTransmission(material, uv).rgb;
-}
-
-float GetTransmission(Material material, float2 uv)
-{
-    return GetAlbedoTransmission(material, uv).a;
 }
 
 #endif // __UNITY_PATHTRACER_MATERIAL_HLSL__

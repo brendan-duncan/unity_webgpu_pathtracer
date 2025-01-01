@@ -6,6 +6,7 @@ RWStructuredBuffer<uint> TextureData;
 uint TextureWidth;
 uint TextureHeight;
 int TextureDataOffset;
+int TextureHasAlpha;
 
 [numthreads(128, 1, 1)]
 void CopyTextureData(uint3 id : SV_DispatchThreadID)
@@ -26,8 +27,8 @@ void CopyTextureData(uint3 id : SV_DispatchThreadID)
     uint r = (uint)(texel.r * 255.0f) & 0xff;
     uint g = (uint)(texel.g * 255.0f) & 0xff;
     uint b = (uint)(texel.b * 255.0f) & 0xff;
-    uint a = (uint)(texel.a * 255.0f) & 0xff;
+    uint a = TextureHasAlpha ? (uint)(texel.a * 255.0f) & 0xff : 0xff;
     uint texelData = (a << 24) | (b << 16) | (g << 8) | r;
 
-    TextureData[writeIndex] = asuint(texelData);
+    TextureData[writeIndex] = texelData;
 }

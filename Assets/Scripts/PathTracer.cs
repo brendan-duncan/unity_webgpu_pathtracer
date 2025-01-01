@@ -124,6 +124,10 @@ public class PathTracer : MonoBehaviour
             pathTracerShader.SetBuffer(0, "EnvironmentCdf", environmentCdfBuffer);
             pathTracerShader.SetFloat("EnvironmentCdfSum", sum);
         }
+        else
+        {
+            pathTracerShader.DisableKeyword(hasEnvironmentTextureKeyword);
+        }
     }
 
     void OnDestroy()

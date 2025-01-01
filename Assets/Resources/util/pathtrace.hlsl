@@ -3,7 +3,7 @@
 
 #include "bvh.hlsl"
 #include "common.hlsl"
-#include "disney.hlsl"
+#include "disney_brdf.hlsl"
 #include "material.hlsl"
 #include "ray.hlsl"
 #include "sky.hlsl"
@@ -58,13 +58,9 @@ float3 PathTrace(Ray ray, inout uint rngSeed)
         // Sample BSDF for color and outgoing direction
         scatterSample.f = DisneySample(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngSeed);
         if (scatterSample.pdf > 0.0)
-        {
             throughput *= scatterSample.f / scatterSample.pdf;
-        }
         else
-        {
             break;
-        }
 
         // Move ray origin to hit point and set direction for next bounce
         ray.direction = scatterSample.L;

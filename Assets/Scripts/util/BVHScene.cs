@@ -5,6 +5,7 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Experimental.Rendering;
 
 public class BVHScene
 {
@@ -228,7 +229,8 @@ public class BVHScene
         Debug.Log("Meshes processed. Total triangles: " + totalTriangleCount);
 
         // Number of float/uint values in material.hlsl
-        const int materialSize = 16;
+        const int materialSize = 28;
+        const int textureOffset = 24;
 
         List<Texture> textures = new List<Texture>();
 
@@ -240,7 +242,7 @@ public class BVHScene
         float[] materialData = new float[materials.Count * materialSize];
         for (int i = 0; i < materials.Count; i++)
         {
-            Color color = 
+            Color baseColor = 
                 materials[i].HasProperty("_Color") ? materials[i].color
                 : materials[i].HasProperty("baseColorFactor") ? materials[i].GetColor("baseColorFactor")
                 : new Color(0.8f, 0.8f, 0.8f, 1.0f);
@@ -256,52 +258,99 @@ public class BVHScene
                 materials[i].HasProperty("_Glossiness") ? 1.0f - materials[i].GetFloat("_Glossiness")
                 : materials[i].HasProperty("roughnessFactor") ? materials[i].GetFloat("roughnessFactor")
                 : 0.0f;
-            int mode = 
-                materials[i].HasProperty("_Mode") ? materials[i].GetInt("_Mode")
-                : materials[i].HasProperty("mode") ? materials[i].GetInt("mode")
-                : 0;
             float ior = 
                 materials[i].HasProperty("_IOR") ? materials[i].GetFloat("_IOR")
                 : materials[i].HasProperty("ior") ? materials[i].GetFloat("ior")
                 : 1.1f;
+            float normalScale = 
+                materials[i].HasProperty("_BumpScale") ? materials[i].GetFloat("_BumpScale")
+                : materials[i].HasProperty("normalScale") ? materials[i].GetFloat("normalScale")
+                : 1.0f;
+            int alphaMode = 
+                materials[i].HasProperty("alphaMode") ? (int)materials[i].GetFloat("alphaMode")
+                : 0;
+            float alphaCutoff = 
+                materials[i].HasProperty("alphaCutoff") ? materials[i].GetFloat("alphaCutoff")
+                : 0.5f;
+            float anisotropic = 
+                materials[i].HasProperty("anisotropicFactor") ? materials[i].GetFloat("anisotropicFactor")
+                : 0.0f;
+            float specular = 
+                materials[i].HasProperty("specularFactor") ? materials[i].GetFloat("specularFactor")
+                : 0.0f;
+            float specularTint = 
+                materials[i].HasProperty("specularTint") ? materials[i].GetFloat("specularTint")
+                : 0.0f;
+            float sheen = 
+                materials[i].HasProperty("sheenFactor") ? materials[i].GetFloat("sheenFactor")
+                : 0.0f;
+            float sheenTint =
+                materials[i].HasProperty("sheenTint") ? materials[i].GetFloat("sheenTint")
+                : 0.0f;
+            float subsurface =
+                materials[i].HasProperty("subsurfaceFactor") ? materials[i].GetFloat("subsurfaceFactor")
+                : 0.0f;
+            float clearCoat =
+                materials[i].HasProperty("clearCoatFactor") ? materials[i].GetFloat("clearCoatFactor")
+                : 0.0f;
+            float clearCoatGloss =
+                materials[i].HasProperty("clearCoatGloss") ? materials[i].GetFloat("clearCoatGloss")
+                : 0.0f;
 
             int mdi = i * materialSize;
+            int mti = mdi + textureOffset;
 
-            materialData[mdi + 0] = color.r;
-            materialData[mdi + 1] = color.g;
-            materialData[mdi + 2] = color.b;
-            materialData[mdi + 3] = 1.0f - color.a; // transmission
+            Debug.Log("Material: " + materials[i].name + " metallic:" + metallic);
 
-            materialData[mdi + 4] = emission.r;
+            materialData[mdi + 0] = baseColor.r; // data1
+            materialData[mdi + 1] = baseColor.g;
+            materialData[mdi + 2] = baseColor.b;
+            materialData[mdi + 3] = baseColor.a;
+
+            materialData[mdi + 4] = emission.r; // data2
             materialData[mdi + 5] = emission.g;
             materialData[mdi + 6] = emission.b;
-            materialData[mdi + 7] = 0.0f;
+            materialData[mdi + 7] = alphaCutoff;
 
-            materialData[mdi + 8] = metallic;
+            materialData[mdi + 8] = metallic; // data3
             materialData[mdi + 9] = roughness;
-            materialData[mdi + 10] = (float)mode;
+            materialData[mdi + 10] = normalScale;
             materialData[mdi + 11] = ior;
 
-            materialData[mdi + 12] = -1.0f; // baseColor texture
-            materialData[mdi + 13] = -1.0f; // metallicRoughness texture
-            materialData[mdi + 14] = -1.0f; // normal texture
-            materialData[mdi + 15] = -1.0f; // emission texture
+            materialData[mdi + 12] = alphaMode; // data4
+            materialData[mdi + 13] = anisotropic;
+            materialData[mdi + 14] = specular;
+            materialData[mdi + 15] = specularTint;
+
+            materialData[mdi + 16] = sheen; // data5
+            materialData[mdi + 17] = sheenTint;
+            materialData[mdi + 18] = subsurface;
+            materialData[mdi + 19] = clearCoat;
+
+            materialData[mdi + 20] = clearCoatGloss; // data6
+            materialData[mdi + 21] = 1.0f - baseColor.a;
+            materialData[mdi + 22] = 0.0f;
+            materialData[mdi + 23] = 0.0f;
+
+            materialData[mti + 0] = -1.0f; // baseColorOpacity texture
+            materialData[mti + 1] = -1.0f; // metallicRoughness texture
+            materialData[mti + 2] = -1.0f; // normal texture
+            materialData[mti + 3] = -1.0f; // emission texture
 
             // BaseColor texture
             Texture mainTex = materials[i].HasProperty("_MainTex") ? materials[i].GetTexture("_MainTex")
                 : materials[i].HasProperty("baseColorTexture") ? materials[i].GetTexture("baseColorTexture")
                 : null;
-
             if (mainTex)
             {
                 if (textures.Contains(mainTex))
                 {
-                    materialData[mdi + 12] = textures.IndexOf(mainTex);
+                    materialData[mti + 0] = textures.IndexOf(mainTex);
                 }
                 else
                 {
                     textures.Add(mainTex);
-                    materialData[mdi + 12] = textures.Count - 1;
+                    materialData[mti + 0] = textures.Count - 1;
                 }
             }
 
@@ -313,12 +362,12 @@ public class BVHScene
             {
                 if (textures.Contains(metallicRoughnessTex))
                 {
-                    materialData[mdi + 13] = textures.IndexOf(metallicRoughnessTex);
+                    materialData[mti + 1] = textures.IndexOf(metallicRoughnessTex);
                 }
                 else
                 {
                     textures.Add(metallicRoughnessTex);
-                    materialData[mdi + 13] = textures.Count - 1;
+                    materialData[mti + 1] = textures.Count - 1;
                 }
             }
 
@@ -330,12 +379,12 @@ public class BVHScene
             {
                 if (textures.Contains(normalTex))
                 {
-                    materialData[mdi + 14] = textures.IndexOf(normalTex);
+                    materialData[mti + 2] = textures.IndexOf(normalTex);
                 }
                 else
                 {
                     textures.Add(normalTex);
-                    materialData[mdi + 14] = textures.Count - 1;
+                    materialData[mti + 2] = textures.Count - 1;
                 }
             }
 
@@ -347,12 +396,12 @@ public class BVHScene
             {
                 if (textures.Contains(emissionTex))
                 {
-                    materialData[mdi + 15] = textures.IndexOf(emissionTex);
+                    materialData[mti + 3] = textures.IndexOf(emissionTex);
                 }
                 else
                 {
                     textures.Add(emissionTex);
-                    materialData[mdi + 15] = textures.Count - 1;
+                    materialData[mti + 3] = textures.Count - 1;
                 }
             }
         }
@@ -386,6 +435,7 @@ public class BVHScene
                 int width = texture.width;
                 int height = texture.height;
                 int totalPixels = width * height;
+                bool hasAlpha = GraphicsFormatUtility.HasAlphaChannel(texture.graphicsFormat);
 
                 Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureDataOffset + " " + (totalPixels * 4) + " bytes");
                 textureIndex++;
@@ -394,11 +444,12 @@ public class BVHScene
                 textureDescriptorData[ti++] = (uint)height;
                 textureDescriptorData[ti++] = (uint)textureDataOffset;
                 textureDescriptorData[ti++] = (uint)0;
-                
+
                 textureCopyShader.SetTexture(0, "Texture", texture);
                 textureCopyShader.SetInt("TextureWidth", width);
                 textureCopyShader.SetInt("TextureHeight", height);
                 textureCopyShader.SetInt("TextureDataOffset", textureDataOffset);
+                textureCopyShader.SetInt("TextureHasAlpha", hasAlpha ? 1 : 0);
 
                 int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
                 textureCopyShader.Dispatch(0, dispatchX, 1, 1);
