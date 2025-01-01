@@ -7,6 +7,108 @@
 #include "ray.hlsl"
 #include "triangle_attributes.hlsl"
 
+bool BackfaceCulling;
+int TriangleCount;
+StructuredBuffer<float4> BVHTris;
+StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
+
+float3 GetGeometricNormal(RayHit hit)
+{
+    float3 v0 = BVHTris[hit.triAddr + 2].xyz;
+    float3 e1 = BVHTris[hit.triAddr + 1].xyz;
+    float3 e2 = BVHTris[hit.triAddr + 0].xyz;
+    return normalize(cross(e1, e2));
+}
+
+float2 InterpolateAttribute(float2 barycentric, float2 attr0, float2 attr1, float2 attr2)
+{
+    return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
+}
+
+float3 InterpolateAttribute(float2 barycentric, float3 attr0, float3 attr1, float3 attr2)
+{
+    return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
+}
+
+void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
+{
+    float3 v0 = BVHTris[triAddr + 2].xyz;
+    float3 e1 = BVHTris[triAddr + 1].xyz;
+    float3 e2 = BVHTris[triAddr + 0].xyz;
+    
+    float3 r = cross(ray.direction.xyz, e2);
+    float a = dot(e1, r);
+
+    if (abs(a) > 0.0000001f)
+    {
+        float f = 1.0f / a;
+        float3 s = ray.origin.xyz - v0;
+        float u = f * dot(s, r);
+
+        if (u >= 0.0f && u <= 1.0f)
+        {
+            float3 q = cross(s, e1);
+            float v = f * dot(ray.direction.xyz, q);
+
+            if (v >= 0.0f && u + v <= 1.0f)
+            {
+                float d = f * dot(e2, q);
+
+                if (d > 0.0001f && d < hit.distance)
+                {
+                    uint triIndex = asuint(BVHTris[triAddr + 2].w);
+                    float2 barycentric = float2(u, v);
+                    TriangleAttributes triAttr = TriangleAttributesBuffer[triIndex];
+                    float3 normal = normalize(InterpolateAttribute(barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+                    if (!BackfaceCulling)
+                    {
+                        hit.normal = normal;                       
+                        hit.barycentric = barycentric;
+                        hit.triAddr = triAddr;
+                        hit.triIndex = triIndex;
+                        hit.distance = d;
+                    }
+                    else
+                    {
+                        // Skip the back face of the triangle
+                        if (dot(normal, ray.direction) < 0.0f)
+                        {
+                            hit.normal = normal;
+                            hit.barycentric = barycentric;
+                            hit.triAddr = triAddr;
+                            hit.triIndex = triIndex;
+                            hit.distance = d;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+RayHit RayIntersectAll(Ray ray)
+{
+    RayHit hit = (RayHit)0;
+    hit.distance = FarPlane;
+
+    for (int i = 0; i < TriangleCount; i += 3)
+    {
+        IntersectTriangle(i, ray, hit);
+    }
+
+    if (hit.distance < FarPlane)
+    {
+        TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
+        hit.position = ray.origin + hit.distance * ray.direction;
+        hit.material = Materials[triAttr.materialIndex];
+        hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+        hit.tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
+        hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
+    }
+
+    return hit;
+}
+
 // Nodes in CWBVH format.
 struct BVHNode
 {
@@ -18,15 +120,7 @@ struct BVHNode
 };
 
 StructuredBuffer<BVHNode> BVHNodes;
-StructuredBuffer<float4> BVHTris;
-StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
-uint EmissiveTriangleCount = 0;
-/*StructuredBuffer<uint2> EmissiveTriangles;
-StructuredBuffer<uint2> EmissiveAliasTable;
-StructuredBuffer<BHVNode> EmissiveBVHNodes;*/
-
-bool BackfaceCulling;
 
 // Stack size for BVH traversal
 #define BHV_STACK_SIZE 32
@@ -116,72 +210,6 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
     return hitmask;
 }
 
-float2 InterpolateAttribute(float2 barycentric, float2 attr0, float2 attr1, float2 attr2)
-{
-    return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
-}
-
-float3 InterpolateAttribute(float2 barycentric, float3 attr0, float3 attr1, float3 attr2)
-{
-    return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
-}
-
-void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
-{
-    float3 v0 = BVHTris[triAddr].xyz;
-    float3 e1 = BVHTris[triAddr + 1].xyz - v0;
-    float3 e2 = BVHTris[triAddr + 2].xyz - v0;
-    
-    float3 r = cross(ray.direction.xyz, e2);
-    float a = dot(e1, r);
-
-    if (abs(a) > 0.0000001f)
-    {
-        float f = 1.0f / a;
-        float3 s = ray.origin.xyz - v0;
-        float u = f * dot(s, r);
-
-        if (u >= 0.0f && u <= 1.0f)
-        {
-            float3 q = cross(s, e1);
-            float v = f * dot(ray.direction.xyz, q);
-
-            if (v >= 0.0f && u + v <= 1.0f)
-            {
-                float d = f * dot(e2, q);
-
-                if (d > 0.0001f && d < hit.distance)
-                {
-                    uint triIndex = asuint(BVHTris[triAddr].w);
-                    float2 barycentric = float2(u, v);
-                    TriangleAttributes triAttr = TriangleAttributesBuffer[triIndex];
-                    float3 normal = normalize(InterpolateAttribute(barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
-                    if (!BackfaceCulling)
-                    {
-                        hit.normal = normal;                       
-                        hit.barycentric = barycentric;
-                        hit.triAddr = triAddr;
-                        hit.triIndex = triIndex;
-                        hit.distance = d;
-                    }
-                    else
-                    {
-                        // Skip the back face of the triangle
-                        if (dot(normal, ray.direction) < 0.0f)
-                        {
-                            hit.normal = normal;
-                            hit.barycentric = barycentric;
-                            hit.triAddr = triAddr;
-                            hit.triIndex = triIndex;
-                            hit.distance = d;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
 {
     RayHit hit = (RayHit)0;
@@ -192,6 +220,8 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
     
     uint2 stack[BHV_STACK_SIZE];
     uint stackPtr = 0;
+    // 0x80000000 gets mis-compiled because FXC changes it to -0.0f, and Tint throws away the sign bit.
+    // Use 0x80000001 instead.
     uint2 nodeGroup = uint2(0, 0x80000001);
     uint2 triGroup = uint2(0, 0);
     int count = 0;
@@ -200,10 +230,10 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
     {
         if (nodeGroup.y > 0x00FFFFFF)
         {
+            // Convert the 0x80000001 back to 0x80000000
             if (nodeGroup.y == 0x80000001)
-            {
                 nodeGroup.y -= 1;
-            }
+
             count += 1;
             uint mask = nodeGroup.y;
             uint childBitIndex = firstbithigh(mask);
@@ -278,31 +308,19 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
     return hit;
 }
 
-float3 GetGeometricNormal(RayHit hit)
-{
-    float3 v0 = BVHTris[hit.triAddr].xyz;
-    float3 e1 = BVHTris[hit.triAddr + 1].xyz - v0;
-    float3 e2 = BVHTris[hit.triAddr + 2].xyz - v0;
-    
-    return normalize(cross(e1, e2));
-}
-
 RayHit RayIntersect(Ray ray)
 {
     return RayIntersectBvh(ray, false);
+    //return RayIntersectAll(ray);
 }
 
 float ShadowRay(const Ray ray)
 {
     RayHit hit = RayIntersectBvh(ray, true);
     if (hit.distance < FarPlane)
-    {
         return 0.0f;
-    }
     else
-    {
         return 1.0f;
-    }
 }
 
 #endif // __UNITY_PATHTRACER_BVH_HLSL__

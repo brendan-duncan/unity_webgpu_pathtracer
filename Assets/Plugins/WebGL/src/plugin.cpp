@@ -3,12 +3,10 @@
 #include <vector>
 
 #define TINYBVH_IMPLEMENTATION
-#include "tinybvh/tiny_bvh2.h"
 #include "plugin.h"
 
 struct BVHContainer
 {
-    tinybvh::BVH8* bvh8 = nullptr;
     tinybvh::BVH8_CWBVH* cwbvh = nullptr;
 };
 
@@ -41,23 +39,17 @@ BVHContainer* GetBVH(int index)
 {
     //std::lock_guard<std::mutex> lock(gBVHMutex);
     if (index >= 0 && index < static_cast<int>(gBVHs.size())) 
-    {
         return gBVHs[index];
-    }
     return nullptr;
 }
 
-int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount, bool buildCWBVH)
+int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount)
 {
     BVHContainer* container = new BVHContainer();
-    container->bvh8 = new tinybvh::BVH8();
-    container->bvh8->Build(vertices, triangleCount);
 
-    if (buildCWBVH)
-    {
-        container->cwbvh = new tinybvh::BVH8_CWBVH();
-        container->cwbvh->ConvertFrom(*container->bvh8);
-    }
+    container->cwbvh = new tinybvh::BVH8_CWBVH();
+    //container->cwbvh->BuildHQ(vertices, triangleCount);
+    container->cwbvh->Build(vertices, triangleCount);
     
     return AddBVH(container);
 }
@@ -70,14 +62,7 @@ void DestroyBVH(int index)
         if (gBVHs[index] != nullptr)
         {
             if (gBVHs[index]->cwbvh != nullptr)
-            {
                 delete gBVHs[index]->cwbvh;
-            }
-
-            if (gBVHs[index]->bvh8 != nullptr)
-            {
-                delete gBVHs[index]->bvh8;
-            }
 
             delete gBVHs[index];
             gBVHs[index] = nullptr;
@@ -91,20 +76,16 @@ bool IsBVHReady(int index)
     return (bvh != nullptr);
 }
 
-tinybvh::Intersection Intersect(int index, tinybvh::bvhvec3 origin, tinybvh::bvhvec3 direction, bool useCWBVH)
+tinybvh::Intersection Intersect(int index, tinybvh::bvhvec3 origin, tinybvh::bvhvec3 direction)
 {
     BVHContainer* bvh = GetBVH(index);
     if (bvh != nullptr)
     {
         tinybvh::Ray ray(origin, direction);
-        if (useCWBVH && bvh->cwbvh != nullptr)
-        {
+        if (bvh->cwbvh != nullptr)
             bvh->cwbvh->Intersect(ray);
-        }
-        else 
-        {
-            bvh->bvh8->Intersect(ray);
-        }
+        else
+            return tinybvh::Intersection();
         return ray.hit;
     }
     return tinybvh::Intersection();
@@ -126,9 +107,7 @@ bool GetCWBVHData(int index, tinybvh::bvhvec4** bvhNodes, tinybvh::bvhvec4** bvh
 {
     BVHContainer* bvh = GetBVH(index);
     if (bvh == nullptr || bvh->cwbvh == nullptr)
-    {
         return false;
-    }
 
     if (bvh->cwbvh->bvh8Data != nullptr && bvh->cwbvh->bvh8Tris != nullptr)
     {

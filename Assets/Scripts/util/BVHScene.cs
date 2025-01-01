@@ -21,8 +21,8 @@ public class BVHScene
     int totalTriangleCount = 0;
     DateTime readbackStartTime;
 
-    public ComputeBuffer vertexPositionBufferGPU;
-    public NativeArray<Vector4> vertexPositionBufferCPU;
+    ComputeBuffer vertexPositionBufferGPU;
+    NativeArray<Vector4> vertexPositionBufferCPU;
     ComputeBuffer triangleAttributesBuffer;
     ComputeBuffer materialsBuffer;
 
@@ -31,7 +31,7 @@ public class BVHScene
     ComputeBuffer textureDataBuffer;
 
     // BVH data
-    tinybvh.BVH sceneBVH;
+    public tinybvh.BVH sceneBVH;
     bool buildingBVH = false;
     ComputeBuffer bvhNodes;
     ComputeBuffer bvhTris;
@@ -44,8 +44,8 @@ public class BVHScene
     const int BVHNodeSize = 80;
     const int BVHTriSize = 16;
     // Number of float/uint values in material.hlsl
-    const int materialSize = 28;
-    const int textureOffset = 24;
+    const int MaterialSize = 28;
+    const int TextureOffset = 24;
 
     public void Start()
     {
@@ -119,14 +119,13 @@ public class BVHScene
     public void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
     {
         if (bvhNodes == null || bvhTris == null || triangleAttributesBuffer == null)
-        {
             return;
-        }
 
         cmd.SetComputeBufferParam(shader, kernelIndex, "BVHNodes", bvhNodes);
         cmd.SetComputeBufferParam(shader, kernelIndex, "BVHTris", bvhTris);
         cmd.SetComputeBufferParam(shader, kernelIndex, "TriangleAttributesBuffer", triangleAttributesBuffer);
         cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", materialsBuffer);
+        cmd.SetComputeIntParam(shader, "TriangleCount", 2);
 
         if (textureDataBuffer != null)
         {
@@ -138,7 +137,7 @@ public class BVHScene
     public void UpdateMaterialData(bool updateTextures)
     {
         List<Texture> textures = new List<Texture>();
-        float[] materialData = new float[materials.Count * materialSize];
+        float[] materialData = new float[materials.Count * MaterialSize];
         for (int i = 0; i < materials.Count; i++)
         {
             Color baseColor = 
@@ -196,8 +195,8 @@ public class BVHScene
                 materials[i].HasProperty("clearCoatGloss") ? materials[i].GetFloat("clearCoatGloss")
                 : 0.0f;
 
-            int mdi = i * materialSize;
-            int mti = mdi + textureOffset;
+            int mdi = i * MaterialSize;
+            int mti = mdi + TextureOffset;
 
             materialData[mdi + 0] = baseColor.r; // data1
             materialData[mdi + 1] = baseColor.g;
@@ -469,7 +468,7 @@ public class BVHScene
 
         List<Texture> textures = new List<Texture>();
 
-        materialsBuffer = new ComputeBuffer(materials.Count, materialSize * 4);
+        materialsBuffer = new ComputeBuffer(materials.Count, MaterialSize * 4);
 
         Debug.Log("Total materials: " + materials.Count);
 
@@ -496,18 +495,17 @@ public class BVHScene
         #if UNITY_EDITOR
             NativeArray<Vector4> persistentBuffer = new NativeArray<Vector4>(vertexPositionBufferCPU.Length, Allocator.Persistent);
             persistentBuffer.CopyFrom(vertexPositionBufferCPU);
-            var dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(persistentBuffer);
+            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(persistentBuffer);
         #else
-            var dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexPositionBufferCPU);
+            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexPositionBufferCPU);
         #endif
         
         // Build BVH in thread.
         #if !PLATFORM_WEBGL
-        Thread thread = new Thread(() =>
-        {
+        //Thread thread = new Thread(() => {
         #endif
             DateTime bvhStartTime = DateTime.UtcNow;
-            sceneBVH.Build(dataPointer, totalTriangleCount, true);
+            sceneBVH.Build(dataPointer, totalTriangleCount);
             TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 
             Debug.Log("BVH built in: " + bvhTime.TotalMilliseconds + "ms");
@@ -516,12 +514,12 @@ public class BVHScene
                 persistentBuffer.Dispose();
             #endif
         #if !PLATFORM_WEBGL
-        });
+        //});
         #endif
 
         buildingBVH = true;
         #if !PLATFORM_WEBGL
-        thread.Start();
+        //thread.Start();
         #endif
     }
 }

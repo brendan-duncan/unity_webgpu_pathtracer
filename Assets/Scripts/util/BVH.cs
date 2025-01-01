@@ -17,7 +17,7 @@ namespace tinybvh
 
 #if PLATFORM_WEBGL
         [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int BuildBVH(IntPtr verticesPtr, int count, bool buildCWBVH);
+        private static extern int BuildBVH(IntPtr verticesPtr, int count);
 
         [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
         private static extern void DestroyBVH(int index);
@@ -26,7 +26,7 @@ namespace tinybvh
         private static extern bool IsBVHReady(int index);
 
         [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern Intersection Intersect(int index, Vector3 origin, Vector3 direction, bool useCWBVH);
+        private static extern Intersection Intersect(int index, Vector3 origin, Vector3 direction);
         
         [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
         private static extern int GetCWBVHNodesSize(int index);
@@ -38,7 +38,7 @@ namespace tinybvh
         private static extern bool GetCWBVHData(int index, out IntPtr bvhNodes, out IntPtr bvhTris);
 #else
         [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int BuildBVH(IntPtr verticesPtr, int count, bool buildCWBVH);
+        private static extern int BuildBVH(IntPtr verticesPtr, int count);
 
         [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern void DestroyBVH(int index);
@@ -47,7 +47,7 @@ namespace tinybvh
         private static extern bool IsBVHReady(int index);
 
         [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
-        private static extern Intersection Intersect(int index, Vector3 origin, Vector3 direction, bool useCWBVH);
+        private static extern Intersection Intersect(int index, Vector3 origin, Vector3 direction);
         
         [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern int GetCWBVHNodesSize(int index);
@@ -64,20 +64,19 @@ namespace tinybvh
 
         // Construct a new BVH from the given vertices.
         // Set buildCWBVH to true if this is intended for GPU traversal.
-        public void Build(IntPtr verticesPtr, int count, bool buildCWBVH = false)
+        public void Build(IntPtr verticesPtr, int count)
         {
             if (index >= 0)
-            {
                 Destroy();
-            }
 
-            index = BuildBVH(verticesPtr, count, buildCWBVH);
+            index = BuildBVH(verticesPtr, count);
         }
 
         // Frees the memory of the BVH in the plugin.
         public void Destroy()
         {
-            if (index < 0) return;
+            if (index < 0)
+                return;
             DestroyBVH(index);
             index = -1;
         }
@@ -85,28 +84,32 @@ namespace tinybvh
         // Returns true if the BVH has finished building and can be read or intersected with.
         public bool IsReady()
         {
-            if (index < 0) return false;
+            if (index < 0)
+                return false;
             return IsBVHReady(index);
         }
 
         // Perform CPU ray intersection
-        public Intersection Intersect(Vector3 origin, Vector3 direction, bool useCWBVH = false)
+        public Intersection Intersect(Vector3 origin, Vector3 direction)
         {
-            if (index < 0) return new Intersection();
-            return Intersect(index, origin, direction, useCWBVH);
+            if (index < 0)
+                return new Intersection();
+            return Intersect(index, origin, direction);
         }
 
         // Retrieve the size of the CWBVH nodes array in bytes.
         public int GetCWBVHNodesSize()
         {
-            if (index < 0) return 0;
+            if (index < 0)
+                return 0;
             return GetCWBVHNodesSize(index);
         }
 
         // Retrieve the size of the CWBVH triangles array in bytes.
         public int GetCWBVHTrisSize()
         {
-            if (index < 0) return 0;
+            if (index < 0)
+                return 0;
             return GetCWBVHTrisSize(index);
         }
 

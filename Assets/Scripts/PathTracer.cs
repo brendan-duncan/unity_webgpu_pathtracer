@@ -146,6 +146,29 @@ public class PathTracer : MonoBehaviour
     {
         bvhScene.Update();
         pathTracerShader.SetKeyword(hasTexturesKeyword, bvhScene.HasTextures());
+
+        /*float mouseX = Input.mousePosition.x;
+        float mouseY = Screen.height - 1 - Input.mousePosition.y;
+
+        Matrix4x4 CamInvProj = sourceCamera.projectionMatrix.inverse;
+        Matrix4x4 CamToWorld = sourceCamera.cameraToWorldMatrix;
+
+        //float3 origin = mul(CamToWorld, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+        Vector4 origin = sourceCamera.transform.position;
+
+        // Compute world space direction
+        float u = (mouseX / Screen.width) * 2.0f - 1.0f;
+        float v = (mouseY / Screen.height) * 2.0f - 1.0f;
+
+        Vector4 direction4 = CamInvProj * new Vector4(u, v, 0.0f, 1.0f);
+        direction4.w = 0.0f;
+        direction4 = CamToWorld * direction4;
+        Vector3 direction = new Vector3(direction4.x, direction4.y, direction4.z);
+        direction.Normalize();
+
+        var isect = bvhScene.sceneBVH.Intersect(origin, direction);
+        if (isect.t < 1.0e30f)
+            Debug.Log("Intersection at: " + isect.t);*/
     }
 
     public void Reset()
@@ -195,13 +218,10 @@ public class PathTracer : MonoBehaviour
 
             // Prepare buffers and output texture
             if (Utilities.PrepareRenderTexture(ref outputRT[0], outputWidth, outputHeight, RenderTextureFormat.ARGBFloat))
-            {
                 Reset();
-            }
+
             if (Utilities.PrepareRenderTexture(ref outputRT[1], outputWidth, outputHeight, RenderTextureFormat.ARGBFloat))
-            {
                 Reset();
-            }
 
             if (rngStateBuffer != null && (rngStateBuffer.count != totalRays || currentSample == 0))
             {
