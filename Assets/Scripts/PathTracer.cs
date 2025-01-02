@@ -11,7 +11,8 @@ public enum TonemapMode {
 }
 
 public enum EnvironmentMode {
-    Standard,
+    Color,
+    Basic,
     Physical
 }
 
@@ -25,7 +26,9 @@ public class PathTracer : MonoBehaviour
     public float folalLength = 10.0f;
     public float aperature = 0.0f;
     public float skyTurbidity = 1.0f;
-    public EnvironmentMode environmentMode = EnvironmentMode.Standard;
+    public EnvironmentMode environmentMode = EnvironmentMode.Color;
+    //[ColorUsage(hdr=true, showAlpha=false)]
+    public Color environmentColor = Color.white;
     public float environmentIntensity = 1.0f;
     public Texture2D environmentTexture;
     public float exposure = 1.0f;
@@ -146,29 +149,6 @@ public class PathTracer : MonoBehaviour
     {
         bvhScene.Update();
         pathTracerShader.SetKeyword(hasTexturesKeyword, bvhScene.HasTextures());
-
-        /*float mouseX = Input.mousePosition.x;
-        float mouseY = Screen.height - 1 - Input.mousePosition.y;
-
-        Matrix4x4 CamInvProj = sourceCamera.projectionMatrix.inverse;
-        Matrix4x4 CamToWorld = sourceCamera.cameraToWorldMatrix;
-
-        //float3 origin = mul(CamToWorld, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
-        Vector4 origin = sourceCamera.transform.position;
-
-        // Compute world space direction
-        float u = (mouseX / Screen.width) * 2.0f - 1.0f;
-        float v = (mouseY / Screen.height) * 2.0f - 1.0f;
-
-        Vector4 direction4 = CamInvProj * new Vector4(u, v, 0.0f, 1.0f);
-        direction4.w = 0.0f;
-        direction4 = CamToWorld * direction4;
-        Vector3 direction = new Vector3(direction4.x, direction4.y, direction4.z);
-        direction.Normalize();
-
-        var isect = bvhScene.sceneBVH.Intersect(origin, direction);
-        if (isect.t < 1.0e30f)
-            Debug.Log("Intersection at: " + isect.t);*/
     }
 
     public void Reset()
@@ -293,5 +273,6 @@ public class PathTracer : MonoBehaviour
         cmd.SetComputeBufferParam(shader, 0, "SkyStateBuffer", skyStateBuffer);
         cmd.SetComputeIntParam(shader, "EnvironmentMode", (int)environmentMode);
         cmd.SetComputeFloatParam(shader, "EnvironmentIntensity", environmentIntensity);
+        cmd.SetComputeVectorParam(shader, "EnvironmentColor", environmentColor);
     }
 }

@@ -4,6 +4,7 @@
 #include "common.hlsl"
 
 int EnvironmentMode;
+float3 EnvironmentColor;
 float EnvironmentIntensity;
 
 #if HAS_ENVIRONMENT_TEXTURE
@@ -118,9 +119,15 @@ float4 BackgroundColor(float3 r, float intensity)
     return EvalEnvMap(r, intensity);
 #else
     float pdf = 1.0f / (4.0f * PI);
+    return float4(EnvironmentColor * intensity, pdf);
+#endif
+}
+
+float4 StandardSky(float3 r, float intensity)
+{
+    float pdf = 1.0f / (4.0f * PI);
     float yHeight = 0.5f * (-r.y + 1.0f);
     return float4(((1.0f - yHeight) * (float3)1.0f + yHeight * float3(0.5f, 0.7f, 1.0f)) * intensity, pdf);
-#endif
 }
 
 // From https://github.com/Nelarius/rayfinder
@@ -190,7 +197,14 @@ float SkyRadiance(float theta, float gamma, uint channel)  {
 float4 SampleSkyRadiance(float3 direction, int rayDepth)
 {
     float4 radiance = 0.0f;
-    if (EnvironmentMode == 1)
+    if (EnvironmentMode == 0)
+    {
+        float intensity = 1.0f;
+        if (rayDepth > 0)
+            intensity = EnvironmentIntensity;
+        radiance = BackgroundColor(direction, intensity);
+    }
+    else if (EnvironmentMode == 1)
     {
         float3 sunDirection = SkyStateBuffer[0].sunDirection;
 
@@ -215,7 +229,7 @@ float4 SampleSkyRadiance(float3 direction, int rayDepth)
         float intensity = 1.0f;
         if (rayDepth > 0)
             intensity = EnvironmentIntensity;
-        radiance = BackgroundColor(direction, intensity);
+        radiance = StandardSky(direction, intensity);
     }
 
     return radiance;

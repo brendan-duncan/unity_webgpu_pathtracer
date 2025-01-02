@@ -159,16 +159,18 @@ public class BVHScene
             float ior = 
                 materials[i].HasProperty("_IOR") ? materials[i].GetFloat("_IOR")
                 : materials[i].HasProperty("ior") ? materials[i].GetFloat("ior")
-                : 1.1f;
+                : 1.0f;
             float normalScale = 
                 materials[i].HasProperty("_BumpScale") ? materials[i].GetFloat("_BumpScale")
                 : materials[i].HasProperty("normalScale") ? materials[i].GetFloat("normalScale")
                 : 1.0f;
             int alphaMode = 
-                materials[i].HasProperty("alphaMode") ? (int)materials[i].GetFloat("alphaMode")
+                materials[i].HasProperty("_Mode") ? ((int)materials[i].GetFloat("_Mode") == 1 ? 2 : 0)
+                : materials[i].HasProperty("alphaMode") ? (int)materials[i].GetFloat("alphaMode")
                 : 0;
             float alphaCutoff = 
-                materials[i].HasProperty("alphaCutoff") ? materials[i].GetFloat("alphaCutoff")
+                materials[i].HasProperty("_Cutoff") ? materials[i].GetFloat("_Cutoff")
+                : materials[i].HasProperty("alphaCutoff") ? materials[i].GetFloat("alphaCutoff")
                 : 0.5f;
             float anisotropic = 
                 materials[i].HasProperty("anisotropicFactor") ? materials[i].GetFloat("anisotropicFactor")

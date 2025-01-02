@@ -52,15 +52,25 @@ float3 PathTrace(Ray ray, inout uint rngSeed)
 
         surfaceScatter = true;
 
-        // Next event estimation
-        //radiance += DirectLight(ray, hit, true) * throughput;
-
-        // Sample BSDF for color and outgoing direction
-        scatterSample.f = DisneySample(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngSeed);
-        if (scatterSample.pdf > 0.0)
-            throughput *= scatterSample.f / scatterSample.pdf;
+        // Ignore intersection and continue ray based on alpha test
+        if ((material.alphaMode == ALPHA_MODE_MASK && material.opacity < material.alphaCutoff) ||
+            (material.alphaMode == ALPHA_MODE_BLEND && RandomFloat(rngSeed) > material.opacity))
+        {
+            scatterSample.L = ray.direction;
+            rayDepth--;
+        }
         else
-            break;
+        {
+            // Next event estimation
+            //radiance += DirectLight(ray, hit, true) * throughput;
+
+            // Sample BSDF for color and outgoing direction
+            scatterSample.f = DisneySample(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngSeed);
+            if (scatterSample.pdf > 0.0)
+                throughput *= scatterSample.f / scatterSample.pdf;
+            else
+                break;
+        }
 
         // Move ray origin to hit point and set direction for next bounce
         ray.direction = scatterSample.L;
