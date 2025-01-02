@@ -2,7 +2,6 @@
 //#include <mutex>
 #include <vector>
 
-#define TINYBVH_IMPLEMENTATION
 #include "plugin.h"
 
 struct BVHContainer
@@ -76,20 +75,19 @@ bool IsBVHReady(int index)
     return (bvh != nullptr);
 }
 
-tinybvh::Intersection Intersect(int index, tinybvh::bvhvec3 origin, tinybvh::bvhvec3 direction)
+/*tinybvh::Intersection Intersect(int index, tinybvh::bvhvec3 origin, tinybvh::bvhvec3 direction)
 {
+#ifndef __EMSCRIPTEN__
     BVHContainer* bvh = GetBVH(index);
-    if (bvh != nullptr)
+    if (bvh != nullptr && bvh->cwbvh != nullptr)
     {
         tinybvh::Ray ray(origin, direction);
-        if (bvh->cwbvh != nullptr)
-            bvh->cwbvh->Intersect(ray);
-        else
-            return tinybvh::Intersection();
+        bvh->cwbvh->Intersect(ray);
         return ray.hit;
     }
+#endif
     return tinybvh::Intersection();
-}
+}*/
 
 int GetCWBVHNodesSize(int index)
 {

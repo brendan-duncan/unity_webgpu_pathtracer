@@ -200,9 +200,9 @@ public class BVHScene
             int mdi = i * MaterialSize;
             int mti = mdi + TextureOffset;
 
-            materialData[mdi + 0] = baseColor.r; // data1
-            materialData[mdi + 1] = baseColor.g;
-            materialData[mdi + 2] = baseColor.b;
+            materialData[mdi + 0] = Mathf.Pow(baseColor.r, 2.2f); // data1
+            materialData[mdi + 1] = Mathf.Pow(baseColor.g, 2.2f);
+            materialData[mdi + 2] = Mathf.Pow(baseColor.b, 2.2f);
             materialData[mdi + 3] = baseColor.a;
 
             materialData[mdi + 4] = emission.r; // data2

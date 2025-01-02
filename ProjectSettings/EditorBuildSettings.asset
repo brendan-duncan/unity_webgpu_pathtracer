@@ -14,8 +14,8 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Examples/Scenes/CornellBox.unity
     guid: 6423b87da8f99ad448b16af10b7b75c0
-  - enabled: 0
-    path: Assets/Scenes/Sponza2.unity
-    guid: b48f5f08c5d213e4989900d89b5fdccf
+  - enabled: 1
+    path: Assets/Examples/Scenes/Helmet.unity
+    guid: 091f2aa6ba5ae3446b6a936b425ffae3
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

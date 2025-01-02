@@ -38,7 +38,7 @@ public class PathTracer : MonoBehaviour
     LocalKeyword hasTexturesKeyword;
     LocalKeyword hasEnvironmentTextureKeyword;
 
-    Camera sourceCamera;
+    Camera camera;
     BVHScene bvhScene;
     CommandBuffer cmd;
 
@@ -68,7 +68,10 @@ public class PathTracer : MonoBehaviour
 
     void Start()
     {
-        sourceCamera = GetComponent<Camera>();
+        camera = GetComponent<Camera>();
+
+        camera.cullingMask = 0;
+        camera.clearFlags = CameraClearFlags.SolidColor;
 
         bvhScene = new BVHScene();
         cmd = new CommandBuffer();
@@ -170,8 +173,8 @@ public class PathTracer : MonoBehaviour
             return;
         }
 
-        outputWidth = sourceCamera.scaledPixelWidth;
-        outputHeight = sourceCamera.scaledPixelHeight;
+        outputWidth = camera.scaledPixelWidth;
+        outputHeight = camera.scaledPixelHeight;
         totalRays = outputWidth * outputHeight;
         int dispatchX = Mathf.CeilToInt(totalRays / 128.0f);
 
@@ -224,8 +227,8 @@ public class PathTracer : MonoBehaviour
             {
                 PrepareShader(cmd, pathTracerShader, 0);
                 bvhScene.PrepareShader(cmd, pathTracerShader, 0);
-                cmd.SetComputeMatrixParam(pathTracerShader, "CamInvProj", sourceCamera.projectionMatrix.inverse);
-                cmd.SetComputeMatrixParam(pathTracerShader, "CamToWorld", sourceCamera.cameraToWorldMatrix);
+                cmd.SetComputeMatrixParam(pathTracerShader, "CamInvProj", camera.projectionMatrix.inverse);
+                cmd.SetComputeMatrixParam(pathTracerShader, "CamToWorld", camera.cameraToWorldMatrix);
     
                 cmd.DispatchCompute(pathTracerShader, 0, dispatchX, 1, 1);
             }
@@ -262,7 +265,7 @@ public class PathTracer : MonoBehaviour
         cmd.SetComputeIntParam(shader, "BackfaceCulling", backfaceCulling ? 1 : 0);
         cmd.SetComputeVectorParam(shader, "LightDirection", lightDirection);
         cmd.SetComputeVectorParam(shader, "LightColor", lightColor);
-        cmd.SetComputeFloatParam(shader, "FarPlane", sourceCamera.farClipPlane);
+        cmd.SetComputeFloatParam(shader, "FarPlane", camera.farClipPlane);
         cmd.SetComputeIntParam(shader, "OutputWidth", outputWidth);
         cmd.SetComputeIntParam(shader, "OutputHeight", outputHeight);
         cmd.SetComputeIntParam(shader, "TotalRays", totalRays);

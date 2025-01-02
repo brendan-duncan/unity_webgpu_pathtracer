@@ -6,14 +6,14 @@ namespace tinybvh
 {
     public class BVH
     {
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+        /*[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
         public struct Intersection
         {
             public float t;
             public float u;
             public float v;
             public uint prim;
-        }
+        }*/
 
 #if PLATFORM_WEBGL
         [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
@@ -25,8 +25,8 @@ namespace tinybvh
         [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
         private static extern bool IsBVHReady(int index);
 
-        [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern Intersection Intersect(int index, Vector3 origin, Vector3 direction);
+        //[DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
+        //private static extern Intersection Intersect(int index, Vector3 origin, Vector3 direction);
         
         [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
         private static extern int GetCWBVHNodesSize(int index);
@@ -46,8 +46,8 @@ namespace tinybvh
         [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern bool IsBVHReady(int index);
 
-        [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
-        private static extern Intersection Intersect(int index, Vector3 origin, Vector3 direction);
+        //[DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
+        //private static extern Intersection Intersect(int index, Vector3 origin, Vector3 direction);
         
         [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern int GetCWBVHNodesSize(int index);
@@ -90,12 +90,12 @@ namespace tinybvh
         }
 
         // Perform CPU ray intersection
-        public Intersection Intersect(Vector3 origin, Vector3 direction)
+        /*public Intersection Intersect(Vector3 origin, Vector3 direction)
         {
             if (index < 0)
                 return new Intersection();
             return Intersect(index, origin, direction);
-        }
+        }*/
 
         // Retrieve the size of the CWBVH nodes array in bytes.
         public int GetCWBVHNodesSize()
