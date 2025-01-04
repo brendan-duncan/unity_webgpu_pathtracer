@@ -13,47 +13,43 @@ int SamplesPerPass;
 
 //#define NUM_SAMPLES 1
 
+// Using a 2D dispatch causes a warning for exceeding the number of temp variable registers.
 [numthreads(128, 1, 1)]
+//[numthreads(32, 32, 1)]
 void PathTracer(uint3 id : SV_DispatchThreadID) {
-    if (id.x >= TotalRays) {
+
+    const uint pixelIndex = id.x;
+    const uint pixelX = pixelIndex % OutputWidth;
+    const uint pixelY = pixelIndex / OutputWidth;
+    //const uint pixelX = id.x;
+    //const uint pixelY = id.y;
+    if (pixelX >= OutputWidth || pixelY >= OutputHeight)
         return;
-    }
 
-    const int numSamples = max(1, SamplesPerPass);
-
-    const uint rayIndex = id.x;
-    const uint pixelX = rayIndex % OutputWidth;
-    const uint pixelY = rayIndex / OutputWidth;
     float2 pixelCoords = float2(pixelX, pixelY);
 
-    uint pixelIndex = pixelY * OutputWidth + pixelX;
-    uint rngSeed = RNGStateBuffer[pixelIndex];
+    const int numSamples = max(1, SamplesPerPass);
+    uint rngState = RNGStateBuffer[pixelIndex];
 
     float3 color = 0.0f;
-    //#if NUM_SAMPLES > 1
-    //for (int sampleIndex = 0; sampleIndex < NUM_SAMPLES; ++sampleIndex)
-    //#endif
     for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
     {
-        float2 randomSample = float2(RandomFloat(rngSeed), RandomFloat(rngSeed));
+        float2 randomSample = float2(RandomFloat(rngState), RandomFloat(rngState));
 
         float2 pixelCoordsSample = pixelCoords + randomSample;
 
         Ray ray = GetScreenRay(pixelCoordsSample);
 
-        color += PathTrace(ray, rngSeed);
+        color += PathTrace(ray, rngState);
     }
 
     if (numSamples > 1)
         color /= (float)numSamples;
-    //#if NUM_SAMPLES > 1
-    //color /= (float)NUM_SAMPLES;
-    //#endif
 
     float4 currentColor = AccumulatedOutput[pixelCoords];
     float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + 1.0f);
 
     Output[pixelCoords] = float4(accumilatedColor, 1.0f);
 
-    RNGStateBuffer[pixelIndex] = rngSeed;
+    RNGStateBuffer[pixelIndex] = rngState;
 }

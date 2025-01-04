@@ -15,7 +15,6 @@ float Luminance(float3 color)
 }
 
 uint MaxRayBounces;
-uint TotalRays;
 uint CurrentSample;
 float FarPlane;
 

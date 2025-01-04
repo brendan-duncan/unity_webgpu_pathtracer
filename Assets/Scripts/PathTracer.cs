@@ -27,7 +27,6 @@ public class PathTracer : MonoBehaviour
     public float aperature = 0.0f;
     public float skyTurbidity = 1.0f;
     public EnvironmentMode environmentMode = EnvironmentMode.Color;
-    //[ColorUsage(hdr=true, showAlpha=false)]
     public Color environmentColor = Color.white;
     public float environmentIntensity = 1.0f;
     public Texture2D environmentTexture;
@@ -38,7 +37,7 @@ public class PathTracer : MonoBehaviour
     LocalKeyword hasTexturesKeyword;
     LocalKeyword hasEnvironmentTextureKeyword;
 
-    Camera camera;
+    Camera _camera;
     BVHScene bvhScene;
     CommandBuffer cmd;
 
@@ -47,7 +46,6 @@ public class PathTracer : MonoBehaviour
 
     int outputWidth;
     int outputHeight;
-    int totalRays;
     RenderTexture[] outputRT = { null, null };
     ComputeBuffer rngStateBuffer;
 
@@ -58,7 +56,6 @@ public class PathTracer : MonoBehaviour
     int currentRT = 0;
     int currentSample = 0;
 
-    // Sun for NDotL
     Vector3 lightDirection = new Vector3(1.0f, 1.0f, 1.0f).normalized;
     Vector4 lightColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 
@@ -68,10 +65,10 @@ public class PathTracer : MonoBehaviour
 
     void Start()
     {
-        camera = GetComponent<Camera>();
+        _camera = GetComponent<Camera>();
 
-        camera.cullingMask = 0;
-        camera.clearFlags = CameraClearFlags.SolidColor;
+        _camera.cullingMask = 0;
+        _camera.clearFlags = CameraClearFlags.SolidColor;
 
         bvhScene = new BVHScene();
         cmd = new CommandBuffer();
@@ -86,7 +83,6 @@ public class PathTracer : MonoBehaviour
         hasEnvironmentTextureKeyword = pathTracerShader.keywordSpace.FindKeyword("HAS_ENVIRONMENT_TEXTURE");
 
         //bool hasLight = false;
-
         Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
         foreach (Light light in lights)
         {
@@ -173,10 +169,16 @@ public class PathTracer : MonoBehaviour
             return;
         }
 
-        outputWidth = camera.scaledPixelWidth;
-        outputHeight = camera.scaledPixelHeight;
-        totalRays = outputWidth * outputHeight;
-        int dispatchX = Mathf.CeilToInt(totalRays / 128.0f);
+        outputWidth = _camera.scaledPixelWidth;
+        outputHeight = _camera.scaledPixelHeight;
+        int totalPixels = outputWidth * outputHeight;
+
+        // Using a 2D dispatch causes a warning for exceeding the number of temp variable registers.
+        // Using a 1D dispatch instead.
+        int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
+        int dispatchY = 1;
+        //int dispatchX = Mathf.CeilToInt(outputWidth / 16.0f);
+        //int dispatchY = Mathf.CeilToInt(outputHeight / 16.0f);
 
         if (currentSample < maxSamples)
         {
@@ -206,7 +208,7 @@ public class PathTracer : MonoBehaviour
             if (Utilities.PrepareRenderTexture(ref outputRT[1], outputWidth, outputHeight, RenderTextureFormat.ARGBFloat))
                 Reset();
 
-            if (rngStateBuffer != null && (rngStateBuffer.count != totalRays || currentSample == 0))
+            if (rngStateBuffer != null && (rngStateBuffer.count != totalPixels || currentSample == 0))
             {
                 rngStateBuffer?.Release();
                 rngStateBuffer = null;
@@ -214,12 +216,11 @@ public class PathTracer : MonoBehaviour
 
             if (rngStateBuffer == null)
             {
-                rngStateBuffer = new ComputeBuffer(totalRays, 4);
-                uint[] rngStateData = new uint[totalRays];
-                for (int i = 0; i < totalRays; i++)
-                {
+                rngStateBuffer = new ComputeBuffer(totalPixels, 4);
+                // Initialize the random number generator state buffer to random values
+                uint[] rngStateData = new uint[totalPixels];
+                for (int i = 0; i < totalPixels; i++)
                     rngStateData[i] = (uint)UnityEngine.Random.Range(0, uint.MaxValue);
-                }
                 rngStateBuffer.SetData(rngStateData);
             }
         
@@ -227,10 +228,10 @@ public class PathTracer : MonoBehaviour
             {
                 PrepareShader(cmd, pathTracerShader, 0);
                 bvhScene.PrepareShader(cmd, pathTracerShader, 0);
-                cmd.SetComputeMatrixParam(pathTracerShader, "CamInvProj", camera.projectionMatrix.inverse);
-                cmd.SetComputeMatrixParam(pathTracerShader, "CamToWorld", camera.cameraToWorldMatrix);
+                cmd.SetComputeMatrixParam(pathTracerShader, "CamInvProj", _camera.projectionMatrix.inverse);
+                cmd.SetComputeMatrixParam(pathTracerShader, "CamToWorld", _camera.cameraToWorldMatrix);
     
-                cmd.DispatchCompute(pathTracerShader, 0, dispatchX, 1, 1);
+                cmd.DispatchCompute(pathTracerShader, 0, dispatchX, dispatchY, 1);
             }
             cmd.EndSample("Path Tracer");
         }
@@ -265,10 +266,9 @@ public class PathTracer : MonoBehaviour
         cmd.SetComputeIntParam(shader, "BackfaceCulling", backfaceCulling ? 1 : 0);
         cmd.SetComputeVectorParam(shader, "LightDirection", lightDirection);
         cmd.SetComputeVectorParam(shader, "LightColor", lightColor);
-        cmd.SetComputeFloatParam(shader, "FarPlane", camera.farClipPlane);
+        cmd.SetComputeFloatParam(shader, "FarPlane", _camera.farClipPlane);
         cmd.SetComputeIntParam(shader, "OutputWidth", outputWidth);
         cmd.SetComputeIntParam(shader, "OutputHeight", outputHeight);
-        cmd.SetComputeIntParam(shader, "TotalRays", totalRays);
         cmd.SetComputeIntParam(shader, "CurrentSample", currentSample);
         cmd.SetComputeTextureParam(shader, kernelIndex, "Output", outputRT[currentRT]);
         cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", outputRT[1 - currentRT]);

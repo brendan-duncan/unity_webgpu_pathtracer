@@ -173,10 +173,10 @@ float PowerHeuristic(float a, float b)
     B = cross(N, T);
 }
 
-void SampleSphereLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngSeed)
+void SampleSphereLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngState)
 {
-    float r1 = RandomFloat(rngSeed);
-    float r2 = RandomFloat(rngSeed);
+    float r1 = RandomFloat(rngState);
+    float r2 = RandomFloat(rngState);
 
     float3 sphereCentertoSurface = scatterPos - light.position;
     float distToSphereCenter = length(sphereCentertoSurface);
@@ -201,10 +201,10 @@ void SampleSphereLight(in Light light, in float3 scatterPos, inout LightSampleRe
     lightSample.pdf = distSq / (light.area * 0.5 * abs(dot(lightSample.normal, lightSample.direction)));
 }
 
-void SampleRectLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngSeed)
+void SampleRectLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngState)
 {
-    float r1 = RandomFloat(rngSeed);
-    float r2 = RandomFloat(rngSeed);
+    float r1 = RandomFloat(rngState);
+    float r2 = RandomFloat(rngState);
 
     float3 lightSurfacePos = light.position + light.u * r1 + light.v * r2;
     lightSample.direction = lightSurfacePos - scatterPos;

@@ -89,10 +89,10 @@ float4 EvalEnvMap(float3 r, float intensity)
 #endif
 }
 
-float4 SampleEnvMap(inout float3 color, inout uint rngSeed)
+float4 SampleEnvMap(inout float3 color, inout uint rngState)
 {
 #if HAS_ENVIRONMENT_TEXTURE
-    float rnd = RandomFloat(rngSeed) * EnvironmentCdfSum;
+    float rnd = RandomFloat(rngState) * EnvironmentCdfSum;
     float2 uv = BinarySearch(rnd);
 
     color = EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;

@@ -8,7 +8,7 @@
 #include "ray.hlsl"
 #include "sky.hlsl"
 
-float3 PathTrace(Ray ray, inout uint rngSeed)
+float3 PathTrace(Ray ray, inout uint rngState)
 {
     float3 radiance = 0.0f;
     float3 throughput = 1.0f;
@@ -54,7 +54,7 @@ float3 PathTrace(Ray ray, inout uint rngSeed)
 
         // Ignore intersection and continue ray based on alpha test
         if ((material.alphaMode == ALPHA_MODE_MASK && material.opacity < material.alphaCutoff) ||
-            (material.alphaMode == ALPHA_MODE_BLEND && RandomFloat(rngSeed) > material.opacity))
+            (material.alphaMode == ALPHA_MODE_BLEND && RandomFloat(rngState) > material.opacity))
         {
             scatterSample.L = ray.direction;
             rayDepth--;
@@ -65,7 +65,7 @@ float3 PathTrace(Ray ray, inout uint rngSeed)
             //radiance += DirectLight(ray, hit, true) * throughput;
 
             // Sample BSDF for color and outgoing direction
-            scatterSample.f = DisneySample(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngSeed);
+            scatterSample.f = DisneySample(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngState);
             if (scatterSample.pdf > 0.0)
                 throughput *= scatterSample.f / scatterSample.pdf;
             else
