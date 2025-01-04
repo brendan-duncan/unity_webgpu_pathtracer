@@ -67,6 +67,7 @@ public class PathTracer : MonoBehaviour
     {
         _camera = GetComponent<Camera>();
 
+        // Disable normal camera rendering since we will be replacing the image with our own
         _camera.cullingMask = 0;
         _camera.clearFlags = CameraClearFlags.SolidColor;
 

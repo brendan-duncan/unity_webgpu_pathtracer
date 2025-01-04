@@ -10,11 +10,11 @@ struct BVHContainer
 };
 
 // Global container for BVHs and a mutex for thread safety
-std::deque<BVHContainer*> gBVHs;
+std::deque<tinybvh::BVH8_CWBVH*> gBVHs;
 //std::mutex gBVHMutex;
 
 // Adds a bvh to the global list either reusing an empty slot or making a new one.
-int AddBVH(BVHContainer* newBVH)
+int AddBVH(tinybvh::BVH8_CWBVH* newBVH)
 {
     //std::lock_guard<std::mutex> lock(gBVHMutex);
 
@@ -34,7 +34,7 @@ int AddBVH(BVHContainer* newBVH)
 }
 
 // Fetch a pointer to a BVH by index, or nullptr if the index is invalid
-BVHContainer* GetBVH(int index)
+tinybvh::BVH8_CWBVH* GetBVH(int index)
 {
     //std::lock_guard<std::mutex> lock(gBVHMutex);
     if (index >= 0 && index < static_cast<int>(gBVHs.size())) 
@@ -44,13 +44,11 @@ BVHContainer* GetBVH(int index)
 
 int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount)
 {
-    BVHContainer* container = new BVHContainer();
-
-    container->cwbvh = new tinybvh::BVH8_CWBVH();
-    //container->cwbvh->BuildHQ(vertices, triangleCount);
-    container->cwbvh->Build(vertices, triangleCount);
+    tinybvh::BVH8_CWBVH* cwbvh = new tinybvh::BVH8_CWBVH();
+    //cwbvh->BuildHQ(vertices, triangleCount);
+    cwbvh->Build(vertices, triangleCount);
     
-    return AddBVH(container);
+    return AddBVH(cwbvh);
 }
 
 void DestroyBVH(int index) 
@@ -60,9 +58,6 @@ void DestroyBVH(int index)
     {
         if (gBVHs[index] != nullptr)
         {
-            if (gBVHs[index]->cwbvh != nullptr)
-                delete gBVHs[index]->cwbvh;
-
             delete gBVHs[index];
             gBVHs[index] = nullptr;
         }
@@ -71,46 +66,32 @@ void DestroyBVH(int index)
 
 bool IsBVHReady(int index)
 {
-    BVHContainer* bvh = GetBVH(index);
+    tinybvh::BVH8_CWBVH* bvh = GetBVH(index);
     return (bvh != nullptr);
 }
 
-/*tinybvh::Intersection Intersect(int index, tinybvh::bvhvec3 origin, tinybvh::bvhvec3 direction)
-{
-#ifndef __EMSCRIPTEN__
-    BVHContainer* bvh = GetBVH(index);
-    if (bvh != nullptr && bvh->cwbvh != nullptr)
-    {
-        tinybvh::Ray ray(origin, direction);
-        bvh->cwbvh->Intersect(ray);
-        return ray.hit;
-    }
-#endif
-    return tinybvh::Intersection();
-}*/
-
 int GetCWBVHNodesSize(int index)
 {
-    BVHContainer* bvh = GetBVH(index);
-    return (bvh != nullptr && bvh->cwbvh != nullptr) ? bvh->cwbvh->usedBlocks * 16 : 0;
+    tinybvh::BVH8_CWBVH* bvh = GetBVH(index);
+    return bvh != nullptr ? bvh->usedBlocks * 16 : 0;
 }
 
 int GetCWBVHTrisSize(int index) 
 {
-    BVHContainer* bvh = GetBVH(index);
-    return (bvh != nullptr && bvh->cwbvh != nullptr) ? bvh->cwbvh->triCount * 3 * 16 : 0;
+    tinybvh::BVH8_CWBVH* bvh = GetBVH(index);
+    return bvh != nullptr ? bvh->triCount * 3 * 16 : 0;
 }
 
 bool GetCWBVHData(int index, tinybvh::bvhvec4** bvhNodes, tinybvh::bvhvec4** bvhTris) 
 {
-    BVHContainer* bvh = GetBVH(index);
-    if (bvh == nullptr || bvh->cwbvh == nullptr)
+    tinybvh::BVH8_CWBVH* bvh = GetBVH(index);
+    if (bvh == nullptr)
         return false;
 
-    if (bvh->cwbvh->bvh8Data != nullptr && bvh->cwbvh->bvh8Tris != nullptr)
+    if (bvh->bvh8Data != nullptr && bvh->bvh8Tris != nullptr)
     {
-        *bvhNodes = bvh->cwbvh->bvh8Data;
-        *bvhTris  = bvh->cwbvh->bvh8Tris;
+        *bvhNodes = bvh->bvh8Data;
+        *bvhTris  = bvh->bvh8Tris;
         return true;
     }
 
