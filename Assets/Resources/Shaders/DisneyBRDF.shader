@@ -39,7 +39,7 @@ Shader "PathTracer/DisneyBRDF"
         Blend SrcAlpha OneMinusSrcAlpha
         Tags
         {
-            "Queue" = "Transparent" "IgnoreProjector"="True" "RenderType"="Transparent"
+            "Queue"="Transparent" "IgnoreProjector"="True" "RenderType"="Transparent"
         }
 
         CGINCLUDE
@@ -68,10 +68,6 @@ Shader "PathTracer/DisneyBRDF"
         float clearCoatFactor;
         float clearCoatGloss;
         float ior;
-
-        //sampler2D _AlbedoTex, _NormalTex, _TangentTex;
-        //float3 _BaseColor;
-        //float _NormalStrength, _Roughness, _Metallic, _Subsurface, _Specular, _SpecularTint, _Anisotropic, _Sheen, _SheenTint, _ClearCoat, _ClearCoatGloss;
 
         struct VertexData
         {
@@ -165,7 +161,6 @@ Shader "PathTracer/DisneyBRDF"
             float3 Ctint = Cdlum > 0.0f ? surfaceColor / Cdlum : 1.0f;
             float3 Cspec0 = lerp(specularFactor * 0.08f * lerp(1.0f, Ctint, specularTint), surfaceColor, metallicFactor);
             float3 Csheen = lerp(1.0f, Ctint, sheenTint);
-
 
             // Disney Diffuse
             float FL = SchlickFresnel(ndotl);
@@ -261,14 +256,15 @@ Shader "PathTracer/DisneyBRDF"
                 worldToTangent[2] = unnormalizedNormalWS * renormFactor;
 
                 // Unpack DXT5nm tangent space normal
-                float4 packedNormal = tex2D(normalTexture, uv);
-                packedNormal.w *= packedNormal.x;
+                /*float4 packedNormal = tex2D(normalTexture, uv);
+                packedNormal.w *= packedNormal.x;*/
 
                 float3 N;
-                N.xy = packedNormal.wy * 2.0f - 1.0f;
+                /*N.xy = packedNormal.wy * 2.0f - 1.0f;
                 N.xy *= normalScale;
-                N.z = sqrt(1.0f - saturate(dot(N.xy, N.xy)));
-                N = mul(N, worldToTangent);
+                N.z = sqrt(1.0f - saturate(dot(N.xy, N.xy)));*/
+                //N = mul(N, worldToTangent);
+                N = i.normal.xyz;
 
                 // Unpack DXT5nm tangent space tangent
                 //float3 T;
@@ -287,6 +283,7 @@ Shader "PathTracer/DisneyBRDF"
                 BRDFResults reflection = DisneyBRDF(albedo, L, V, N, X, Y);
 
                 float3 output = _LightColor0 * (reflection.diffuse + reflection.specular + reflection.clearcoat);
+                //float3 output = _LightColor0 * baseColorFactor.rgb * albedo;
                 output *= DotClamped(N, L);
                 output *= SHADOW_ATTENUATION(i);
 
@@ -345,10 +342,11 @@ Shader "PathTracer/DisneyBRDF"
                 packedNormal.w *= packedNormal.x;
 
                 float3 N;
-                N.xy = packedNormal.wy * 2.0f - 1.0f;
+                /*N.xy = packedNormal.wy * 2.0f - 1.0f;
                 N.xy *= normalScale;
-                N.z = sqrt(1.0f - saturate(dot(N.xy, N.xy)));
-                N = mul(N, worldToTangent);
+                N.z = sqrt(1.0f - saturate(dot(N.xy, N.xy)));*/
+                //N = mul(N, worldToTangent);
+                N = i.normal.xyz;
 
                 // Unpack DXT5nm tangent space tangent
                 //float3 T;
@@ -367,6 +365,7 @@ Shader "PathTracer/DisneyBRDF"
                 BRDFResults reflection = DisneyBRDF(albedo, L, V, N, X, Y);
 
                 float3 output = _LightColor0 * (reflection.diffuse + reflection.specular + reflection.clearcoat);
+                //float3 output = _LightColor0 * baseColorFactor.rgb * albedo;
                 output *= DotClamped(N, L);
                 output *= SHADOW_ATTENUATION(i);
 

@@ -136,11 +136,11 @@ Material:
     - clearCoatGloss: 0
     - ior: 1
     - metallic: 0
-    - metallicFactor: 0
+    - metallicFactor: 0.344
     - normalScale: 1
     - normalTextureStrength: 1
     - roughness: 0.5
-    - roughnessFactor: 0
+    - roughnessFactor: 0.268
     - sheen: 0
     - sheenFactor: 0
     - sheenTint: 0
@@ -148,6 +148,7 @@ Material:
     - specularTint: 0
     - specularTransmission: 0
     - subsurface: 0
+    - subsurfaceFactor: 0
     - subsurfacefactor: 0
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
