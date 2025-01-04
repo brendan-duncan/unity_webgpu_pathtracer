@@ -25,22 +25,22 @@ namespace tinybvh
         [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
         private static extern bool GetCWBVHData(int index, out IntPtr bvhNodes, out IntPtr bvhTris);
 #else
-        [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern int BuildBVH(IntPtr verticesPtr, int count);
 
-        [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern void DestroyBVH(int index);
 
-        [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern bool IsBVHReady(int index);
 
-        [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern int GetCWBVHNodesSize(int index);
         
-        [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern int GetCWBVHTrisSize(int index);
 
-        [DllImport("unity-tinybvh-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
         private static extern bool GetCWBVHData(int index, out IntPtr bvhNodes, out IntPtr bvhTris);
 #endif
 

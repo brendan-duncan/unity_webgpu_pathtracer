@@ -404,8 +404,8 @@ public class BVHScene
 
         materials.Clear();
 
-        // Pack each mesh into global vertex buffer via compute shader
-        // Note: this avoids the need for every mesh to have cpu read/write access.
+        // Gather the data for each mesh to pass to tinybvh. This is done in a compute shader with async readback
+        // to avoid each mesh having to have read/write access.
         foreach (MeshRenderer renderer in meshRenderers)
         {
             Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;

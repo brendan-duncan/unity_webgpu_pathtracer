@@ -1,6 +1,8 @@
 using System;
+using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Experimental;
 
 public enum TonemapMode {
     None = 0,
@@ -52,6 +54,9 @@ public class PathTracer : MonoBehaviour
     ComputeBuffer _skyStateBuffer;
     SkyState _skyState;
     ComputeBuffer _environmentCdfBuffer;
+    NativeArray<Color> _envTextureCPU;
+    RenderTexture _envTextureCopy;
+    bool _environmentTextureReady = false;
     
     int _currentRT = 0;
     int _currentSample = 0;
@@ -107,17 +112,52 @@ public class PathTracer : MonoBehaviour
 
         if (environmentTexture != null)
         {
+            _environmentTextureReady = false;
             _pathTracerShader.EnableKeyword(_hasEnvironmentTextureKeyword);
-            _pathTracerShader.SetTexture(0, "EnvironmentTexture", environmentTexture);
 
-            var pixelData = environmentTexture.GetPixelData<Color>(0);
+            // We need to be able to read the data from the environment texture on the CPU.
+            // There are a lot of restrictions for texture format types, partuclarly for compressed formats.
+            // Blit the teture to a render texture, which decompressed any potentially compressed formats.
+            // AsyncGPUReadback then needs to be used to copy the GPU texture to the CPU.
+            Utilities.PrepareRenderTexture(ref _envTextureCopy, environmentTexture.width, environmentTexture.height, RenderTextureFormat.ARGBHalf);
+            Graphics.Blit(environmentTexture, _envTextureCopy);
 
-            _environmentCdfBuffer = new ComputeBuffer(pixelData.Length, 4);
-            float[] cdf = new float[pixelData.Length];
+            _pathTracerShader.SetTexture(0, "EnvironmentTexture", _envTextureCopy);
+
+            
+            _envTextureCPU = new NativeArray<Color>(environmentTexture.width * environmentTexture.height, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+            const int mipLevel = 0;
+            const TextureFormat format = TextureFormat.RGBAHalf;
+            AsyncGPUReadback.RequestIntoNativeArray(ref _envTextureCPU, _envTextureCopy, mipLevel, format, OnEnvTexReadback);
+        }
+        else
+        {
+            _environmentTextureReady = true;
+            _pathTracerShader.DisableKeyword(_hasEnvironmentTextureKeyword);
+        }
+    }
+
+    unsafe void OnEnvTexReadback(AsyncGPUReadbackRequest request)
+    {
+        if (request.hasError)
+        {
+            _envTextureCPU.Dispose();
+            //Destroy(_envTextureCopy);
+            Debug.LogError("GPU readback error detected.");
+            return;
+        }
+
+        if (request.done)
+        {
+            Debug.Log("EnvironmentTexture GPU readback completed.");
+            var data = request.GetData<Color>();
+
+            _environmentCdfBuffer = new ComputeBuffer(data.Length, 4);
+            float[] cdf = new float[data.Length];
             float sum = 0.0f;
-            for (int i = 0; i < pixelData.Length; i++)
+            for (int i = 0; i < data.Length; i++)
             {
-                sum += pixelData[i].grayscale;
+                sum += data[i].grayscale;
                 cdf[i] = sum;
             }
             _environmentCdfBuffer.SetData(cdf);
@@ -125,10 +165,10 @@ public class PathTracer : MonoBehaviour
             _pathTracerShader.SetInt("EnvironmentTextureHeight", environmentTexture.height);
             _pathTracerShader.SetBuffer(0, "EnvironmentCdf", _environmentCdfBuffer);
             _pathTracerShader.SetFloat("EnvironmentCdfSum", sum);
-        }
-        else
-        {
-            _pathTracerShader.DisableKeyword(_hasEnvironmentTextureKeyword);
+            _environmentTextureReady = true;
+
+            _envTextureCPU.Dispose();
+            //Destroy(_envTextureCopy);
         }
     }
 
@@ -142,6 +182,10 @@ public class PathTracer : MonoBehaviour
         _cmd?.Release();
         _skyStateBuffer?.Release();
         _environmentCdfBuffer?.Release();
+        _envTextureCopy?.Release();
+        //if (_envTextureCopy != null)
+            //Destroy(_envTextureCopy);
+        _envTextureCopy = null;
     }
 
     void Update()
@@ -163,7 +207,7 @@ public class PathTracer : MonoBehaviour
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
-        if (!_bvhScene.CanRender())
+        if (!_bvhScene.CanRender() || !_environmentTextureReady)
         {
             Graphics.Blit(source, destination);
             return;
