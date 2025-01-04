@@ -142,7 +142,6 @@ public class PathTracer : MonoBehaviour
         if (request.hasError)
         {
             _envTextureCPU.Dispose();
-            //Destroy(_envTextureCopy);
             Debug.LogError("GPU readback error detected.");
             return;
         }
@@ -168,7 +167,6 @@ public class PathTracer : MonoBehaviour
             _environmentTextureReady = true;
 
             _envTextureCPU.Dispose();
-            //Destroy(_envTextureCopy);
         }
     }
 
@@ -183,8 +181,6 @@ public class PathTracer : MonoBehaviour
         _skyStateBuffer?.Release();
         _environmentCdfBuffer?.Release();
         _envTextureCopy?.Release();
-        //if (_envTextureCopy != null)
-            //Destroy(_envTextureCopy);
         _envTextureCopy = null;
     }
 
