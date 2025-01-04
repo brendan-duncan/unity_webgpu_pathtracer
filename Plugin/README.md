@@ -1,4 +1,4 @@
-# unity-tinybvh-plugin
+# unity-unity-pathtracer-plugin
 A simple wrapper for tinybvh which provides an interface for Unity.
 
 # Compiling for Windows

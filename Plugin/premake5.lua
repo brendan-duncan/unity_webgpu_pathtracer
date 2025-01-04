@@ -1,7 +1,7 @@
 local ROOT_DIR = "./"
 
-solution "unity-tinybvh-plugin"
-    startproject "unity-tinybvh-plugin"
+solution "unity-webgpu-pathtracer-plugin"
+    startproject "unity-webgpu-pathtracer-plugin"
 
     configurations { "Release", "Debug" }
     platforms { "x86_64" }
@@ -21,7 +21,7 @@ solution "unity-tinybvh-plugin"
 
     filter {}
         
-project "unity-tinybvh-plugin"
+project "unity-webgpu-pathtracer-plugin"
     kind "SharedLib"
     language "C++"
     cppdialect "C++17"
@@ -39,15 +39,13 @@ project "unity-tinybvh-plugin"
     }
 
     includedirs {
-        path.join(ROOT_DIR, "../Assets/PlugIns/WebGL/src/"),
-        --path.join(ROOT_DIR, "include/"),
+        path.join(ROOT_DIR, "../Assets/PlugIns/Web/src/"),
     }
 
     files { 
-        path.join(ROOT_DIR, "../Assets/PlugIns/WebGL/src/**.cpp"),
-        path.join(ROOT_DIR, "../Assets/PlugIns/WebGL/src/**.c"),
-        path.join(ROOT_DIR, "../Assets/PlugIns/WebGL/src/**.h"),
-        --path.join(ROOT_DIR, "include/**.h")
+        path.join(ROOT_DIR, "../Assets/PlugIns/Web/src/**.cpp"),
+        path.join(ROOT_DIR, "../Assets/PlugIns/Web/src/**.c"),
+        path.join(ROOT_DIR, "../Assets/PlugIns/Web/src/**.h"),
     }
 
     filter {}
