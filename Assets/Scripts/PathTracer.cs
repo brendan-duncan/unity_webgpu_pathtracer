@@ -34,30 +34,30 @@ public class PathTracer : MonoBehaviour
     public TonemapMode tonemapMode = TonemapMode.Lottes;
     public bool sRGB = false;
 
-    LocalKeyword hasTexturesKeyword;
-    LocalKeyword hasEnvironmentTextureKeyword;
+    LocalKeyword _hasTexturesKeyword;
+    LocalKeyword _hasEnvironmentTextureKeyword;
 
     Camera _camera;
-    BVHScene bvhScene;
-    CommandBuffer cmd;
+    BVHScene _bvhScene;
+    CommandBuffer _cmd;
 
-    ComputeShader pathTracerShader;
-    Material presentationMaterial;
+    ComputeShader _pathTracerShader;
+    Material _presentationMaterial;
 
-    int outputWidth;
-    int outputHeight;
-    RenderTexture[] outputRT = { null, null };
-    ComputeBuffer rngStateBuffer;
+    int _outputWidth;
+    int _outputHeight;
+    RenderTexture[] _outputRT = { null, null };
+    ComputeBuffer _rngStateBuffer;
 
-    ComputeBuffer skyStateBuffer;
-    SkyState skyState;
-    ComputeBuffer environmentCdfBuffer;
+    ComputeBuffer _skyStateBuffer;
+    SkyState _skyState;
+    ComputeBuffer _environmentCdfBuffer;
     
-    int currentRT = 0;
-    int currentSample = 0;
+    int _currentRT = 0;
+    int _currentSample = 0;
 
-    Vector3 lightDirection = new Vector3(1.0f, 1.0f, 1.0f).normalized;
-    Vector4 lightColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+    Vector3 _lightDirection = new Vector3(1.0f, 1.0f, 1.0f).normalized;
+    Vector4 _lightColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 
     // Struct sizes in bytes
     const int RayStructSize = 24;
@@ -70,17 +70,16 @@ public class PathTracer : MonoBehaviour
         _camera.cullingMask = 0;
         _camera.clearFlags = CameraClearFlags.SolidColor;
 
-        bvhScene = new BVHScene();
-        cmd = new CommandBuffer();
+        _bvhScene = new BVHScene();
+        _cmd = new CommandBuffer();
 
-        bvhScene.Start();
+        _bvhScene.Start();
 
-        pathTracerShader = Resources.Load<ComputeShader>("PathTracer");
-        Shader presentationShader = Resources.Load<Shader>("Presentation");
-        presentationMaterial = new Material(presentationShader);
+        _pathTracerShader = Resources.Load<ComputeShader>("PathTracer");
+        _presentationMaterial = new Material(Resources.Load<Shader>("Presentation"));
 
-        hasTexturesKeyword = pathTracerShader.keywordSpace.FindKeyword("HAS_TEXTURES");
-        hasEnvironmentTextureKeyword = pathTracerShader.keywordSpace.FindKeyword("HAS_ENVIRONMENT_TEXTURE");
+        _hasTexturesKeyword = _pathTracerShader.keywordSpace.FindKeyword("HAS_TEXTURES");
+        _hasEnvironmentTextureKeyword = _pathTracerShader.keywordSpace.FindKeyword("HAS_ENVIRONMENT_TEXTURE");
 
         //bool hasLight = false;
         Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
@@ -88,31 +87,31 @@ public class PathTracer : MonoBehaviour
         {
             if (light.type == LightType.Directional)
             {
-                lightDirection = -light.transform.forward;
-                lightColor = light.color * light.intensity;
+                _lightDirection = -light.transform.forward;
+                _lightColor = light.color * light.intensity;
                 //hasLight = true;
                 break;
             }
         }
 
-        lightDirection.Normalize();
+        _lightDirection.Normalize();
 
-        skyStateBuffer = new ComputeBuffer(40, 4);
-        skyState = new SkyState();
-        float[] direction = { lightDirection.x, lightDirection.y, lightDirection.z };
+        _skyStateBuffer = new ComputeBuffer(40, 4);
+        _skyState = new SkyState();
+        float[] direction = { _lightDirection.x, _lightDirection.y, _lightDirection.z };
         float[] groundAlbedo = { 1.0f, 1.0f, 1.0f };
 
-        skyState.Init(direction, groundAlbedo, skyTurbidity);
-        skyState.UpdateBuffer(skyStateBuffer);
+        _skyState.Init(direction, groundAlbedo, skyTurbidity);
+        _skyState.UpdateBuffer(_skyStateBuffer);
 
         if (environmentTexture != null)
         {
-            pathTracerShader.EnableKeyword(hasEnvironmentTextureKeyword);
-            pathTracerShader.SetTexture(0, "EnvironmentTexture", environmentTexture);
+            _pathTracerShader.EnableKeyword(_hasEnvironmentTextureKeyword);
+            _pathTracerShader.SetTexture(0, "EnvironmentTexture", environmentTexture);
 
             var pixelData = environmentTexture.GetPixelData<Color>(0);
 
-            environmentCdfBuffer = new ComputeBuffer(pixelData.Length, 4);
+            _environmentCdfBuffer = new ComputeBuffer(pixelData.Length, 4);
             float[] cdf = new float[pixelData.Length];
             float sum = 0.0f;
             for (int i = 0; i < pixelData.Length; i++)
@@ -120,162 +119,162 @@ public class PathTracer : MonoBehaviour
                 sum += pixelData[i].grayscale;
                 cdf[i] = sum;
             }
-            environmentCdfBuffer.SetData(cdf);
-            pathTracerShader.SetInt("EnvironmentTextureWidth", environmentTexture.width);
-            pathTracerShader.SetInt("EnvironmentTextureHeight", environmentTexture.height);
-            pathTracerShader.SetBuffer(0, "EnvironmentCdf", environmentCdfBuffer);
-            pathTracerShader.SetFloat("EnvironmentCdfSum", sum);
+            _environmentCdfBuffer.SetData(cdf);
+            _pathTracerShader.SetInt("EnvironmentTextureWidth", environmentTexture.width);
+            _pathTracerShader.SetInt("EnvironmentTextureHeight", environmentTexture.height);
+            _pathTracerShader.SetBuffer(0, "EnvironmentCdf", _environmentCdfBuffer);
+            _pathTracerShader.SetFloat("EnvironmentCdfSum", sum);
         }
         else
         {
-            pathTracerShader.DisableKeyword(hasEnvironmentTextureKeyword);
+            _pathTracerShader.DisableKeyword(_hasEnvironmentTextureKeyword);
         }
     }
 
     void OnDestroy()
     {
-        bvhScene?.OnDestroy();
-        bvhScene = null;
-        rngStateBuffer?.Release();
-        outputRT[0]?.Release();
-        outputRT[1]?.Release();
-        cmd?.Release();
-        skyStateBuffer?.Release();
-        environmentCdfBuffer?.Release();
+        _bvhScene?.OnDestroy();
+        _bvhScene = null;
+        _rngStateBuffer?.Release();
+        _outputRT[0]?.Release();
+        _outputRT[1]?.Release();
+        _cmd?.Release();
+        _skyStateBuffer?.Release();
+        _environmentCdfBuffer?.Release();
     }
 
     void Update()
     {
-        bvhScene.Update();
-        pathTracerShader.SetKeyword(hasTexturesKeyword, bvhScene.HasTextures());
+        _bvhScene.Update();
+        _pathTracerShader.SetKeyword(_hasTexturesKeyword, _bvhScene.HasTextures());
     }
 
     public void Reset()
     {
-        currentSample = 0;
+        _currentSample = 0;
     }
 
     public void UpdateMaterialData()
     {
-        bvhScene.UpdateMaterialData(false);
+        _bvhScene.UpdateMaterialData(false);
         Reset();
     }
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
-        if (!bvhScene.CanRender())
+        if (!_bvhScene.CanRender())
         {
             Graphics.Blit(source, destination);
             return;
         }
 
-        outputWidth = _camera.scaledPixelWidth;
-        outputHeight = _camera.scaledPixelHeight;
-        int totalPixels = outputWidth * outputHeight;
+        _outputWidth = _camera.scaledPixelWidth;
+        _outputHeight = _camera.scaledPixelHeight;
+        int totalPixels = _outputWidth * _outputHeight;
 
         // Using a 2D dispatch causes a warning for exceeding the number of temp variable registers.
         // Using a 1D dispatch instead.
         int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
         int dispatchY = 1;
-        //int dispatchX = Mathf.CeilToInt(outputWidth / 16.0f);
-        //int dispatchY = Mathf.CeilToInt(outputHeight / 16.0f);
+        //int dispatchX = Mathf.CeilToInt(_outputWidth / 16.0f);
+        //int dispatchY = Mathf.CeilToInt(_outputHeight / 16.0f);
 
-        if (currentSample < maxSamples)
+        if (_currentSample < maxSamples)
         {
-            Vector3 lastDirection = lightDirection;
+            Vector3 lastDirection = _lightDirection;
             Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
             foreach (Light light in lights)
             {
                 if (light.type == LightType.Directional)
                 {
-                    lightDirection = -light.transform.forward;
-                    lightColor = light.color * light.intensity;
+                    _lightDirection = -light.transform.forward;
+                    _lightColor = light.color * light.intensity;
                     break;
                 }
             }
 
-            if ((lastDirection - lightDirection).sqrMagnitude > 0.0001f)
+            if ((lastDirection - _lightDirection).sqrMagnitude > 0.0001f)
             {
-                skyState.Init(new float[] { lightDirection.x, lightDirection.y, lightDirection.z }, new float[] { 0.3f, 0.2f, 0.1f }, skyTurbidity);
-                skyState.UpdateBuffer(skyStateBuffer);
+                _skyState.Init(new float[] { _lightDirection.x, _lightDirection.y, _lightDirection.z }, new float[] { 0.3f, 0.2f, 0.1f }, skyTurbidity);
+                _skyState.UpdateBuffer(_skyStateBuffer);
                 Reset();
             }
 
             // Prepare buffers and output texture
-            if (Utilities.PrepareRenderTexture(ref outputRT[0], outputWidth, outputHeight, RenderTextureFormat.ARGBFloat))
+            if (Utilities.PrepareRenderTexture(ref _outputRT[0], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
                 Reset();
 
-            if (Utilities.PrepareRenderTexture(ref outputRT[1], outputWidth, outputHeight, RenderTextureFormat.ARGBFloat))
+            if (Utilities.PrepareRenderTexture(ref _outputRT[1], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
                 Reset();
 
-            if (rngStateBuffer != null && (rngStateBuffer.count != totalPixels || currentSample == 0))
+            if (_rngStateBuffer != null && (_rngStateBuffer.count != totalPixels || _currentSample == 0))
             {
-                rngStateBuffer?.Release();
-                rngStateBuffer = null;
+                _rngStateBuffer?.Release();
+                _rngStateBuffer = null;
             }
 
-            if (rngStateBuffer == null)
+            if (_rngStateBuffer == null)
             {
-                rngStateBuffer = new ComputeBuffer(totalPixels, 4);
+                _rngStateBuffer = new ComputeBuffer(totalPixels, 4);
                 // Initialize the random number generator state buffer to random values
                 uint[] rngStateData = new uint[totalPixels];
                 for (int i = 0; i < totalPixels; i++)
                     rngStateData[i] = (uint)UnityEngine.Random.Range(0, uint.MaxValue);
-                rngStateBuffer.SetData(rngStateData);
+                _rngStateBuffer.SetData(rngStateData);
             }
         
-            cmd.BeginSample("Path Tracer");
+            _cmd.BeginSample("Path Tracer");
             {
-                PrepareShader(cmd, pathTracerShader, 0);
-                bvhScene.PrepareShader(cmd, pathTracerShader, 0);
-                cmd.SetComputeMatrixParam(pathTracerShader, "CamInvProj", _camera.projectionMatrix.inverse);
-                cmd.SetComputeMatrixParam(pathTracerShader, "CamToWorld", _camera.cameraToWorldMatrix);
+                PrepareShader(_cmd, _pathTracerShader, 0);
+                _bvhScene.PrepareShader(_cmd, _pathTracerShader, 0);
+                _cmd.SetComputeMatrixParam(_pathTracerShader, "CamInvProj", _camera.projectionMatrix.inverse);
+                _cmd.SetComputeMatrixParam(_pathTracerShader, "CamToWorld", _camera.cameraToWorldMatrix);
     
-                cmd.DispatchCompute(pathTracerShader, 0, dispatchX, dispatchY, 1);
+                _cmd.DispatchCompute(_pathTracerShader, 0, dispatchX, dispatchY, 1);
             }
-            cmd.EndSample("Path Tracer");
+            _cmd.EndSample("Path Tracer");
         }
 
-        presentationMaterial.SetTexture("_MainTex", outputRT[currentRT]);
-        presentationMaterial.SetInt("OutputWidth", outputWidth);
-        presentationMaterial.SetInt("OutputHeight", outputHeight);
-        presentationMaterial.SetFloat("Exposure", exposure);
-        presentationMaterial.SetInt("Mode", (int)tonemapMode);
-        presentationMaterial.SetInt("sRGB", sRGB ? 1 : 0);
+        _presentationMaterial.SetTexture("_MainTex", _outputRT[_currentRT]);
+        _presentationMaterial.SetInt("OutputWidth", _outputWidth);
+        _presentationMaterial.SetInt("OutputHeight", _outputHeight);
+        _presentationMaterial.SetFloat("Exposure", exposure);
+        _presentationMaterial.SetInt("Mode", (int)tonemapMode);
+        _presentationMaterial.SetInt("sRGB", sRGB ? 1 : 0);
         // Overwrite image with output from raytracer, applying tonemapping
-        cmd.Blit(outputRT[currentRT], destination, presentationMaterial);
+        _cmd.Blit(_outputRT[_currentRT], destination, _presentationMaterial);
 
-        if (currentSample <= maxSamples)
+        if (_currentSample <= maxSamples)
         {
-            currentRT = 1 - currentRT;
-            currentSample += Math.Max(1, samplesPerPass);
+            _currentRT = 1 - _currentRT;
+            _currentSample += Math.Max(1, samplesPerPass);
         }
 
-        Graphics.ExecuteCommandBuffer(cmd);
-        cmd.Clear();
+        Graphics.ExecuteCommandBuffer(_cmd);
+        _cmd.Clear();
 
         // Unity complains if destination is not set as the current render target,
         // which doesn't happen using the command buffer.
         Graphics.SetRenderTarget(destination);
     }
 
-    void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
+    void PrepareShader(CommandBuffer _cmd, ComputeShader shader, int kernelIndex)
     {
-        cmd.SetComputeIntParam(shader, "MaxRayBounces", Math.Max(maxRayBounces, 1));
-        cmd.SetComputeIntParam(shader, "SamplesPerPass", samplesPerPass);
-        cmd.SetComputeIntParam(shader, "BackfaceCulling", backfaceCulling ? 1 : 0);
-        cmd.SetComputeVectorParam(shader, "LightDirection", lightDirection);
-        cmd.SetComputeVectorParam(shader, "LightColor", lightColor);
-        cmd.SetComputeFloatParam(shader, "FarPlane", _camera.farClipPlane);
-        cmd.SetComputeIntParam(shader, "OutputWidth", outputWidth);
-        cmd.SetComputeIntParam(shader, "OutputHeight", outputHeight);
-        cmd.SetComputeIntParam(shader, "CurrentSample", currentSample);
-        cmd.SetComputeTextureParam(shader, kernelIndex, "Output", outputRT[currentRT]);
-        cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", outputRT[1 - currentRT]);
-        cmd.SetComputeBufferParam(shader, 0, "RNGStateBuffer", rngStateBuffer);
-        cmd.SetComputeBufferParam(shader, 0, "SkyStateBuffer", skyStateBuffer);
-        cmd.SetComputeIntParam(shader, "EnvironmentMode", (int)environmentMode);
-        cmd.SetComputeFloatParam(shader, "EnvironmentIntensity", environmentIntensity);
-        cmd.SetComputeVectorParam(shader, "EnvironmentColor", environmentColor);
+        _cmd.SetComputeIntParam(shader, "MaxRayBounces", Math.Max(maxRayBounces, 1));
+        _cmd.SetComputeIntParam(shader, "SamplesPerPass", samplesPerPass);
+        _cmd.SetComputeIntParam(shader, "BackfaceCulling", backfaceCulling ? 1 : 0);
+        _cmd.SetComputeVectorParam(shader, "LightDirection", _lightDirection);
+        _cmd.SetComputeVectorParam(shader, "LightColor", _lightColor);
+        _cmd.SetComputeFloatParam(shader, "FarPlane", _camera.farClipPlane);
+        _cmd.SetComputeIntParam(shader, "OutputWidth", _outputWidth);
+        _cmd.SetComputeIntParam(shader, "OutputHeight", _outputHeight);
+        _cmd.SetComputeIntParam(shader, "CurrentSample", _currentSample);
+        _cmd.SetComputeTextureParam(shader, kernelIndex, "Output", _outputRT[_currentRT]);
+        _cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", _outputRT[1 - _currentRT]);
+        _cmd.SetComputeBufferParam(shader, 0, "RNGStateBuffer", _rngStateBuffer);
+        _cmd.SetComputeBufferParam(shader, 0, "SkyStateBuffer", _skyStateBuffer);
+        _cmd.SetComputeIntParam(shader, "EnvironmentMode", (int)environmentMode);
+        _cmd.SetComputeFloatParam(shader, "EnvironmentIntensity", environmentIntensity);
+        _cmd.SetComputeVectorParam(shader, "EnvironmentColor", environmentColor);
     }
 }
