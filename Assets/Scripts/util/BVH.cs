@@ -6,7 +6,9 @@ namespace tinybvh
 {
     public class BVH
     {
-#if UNITY_WEBGL || UNITY_IPHONE || UNITY_IOS
+#if UNITY_EDITOR
+        const string libraryName = "unity-webgpu-pathtracer-plugin";
+#elif PLATFORM_WEBGL
         const string libraryName = "__Internal";
 #else
         const string libraryName = "unity-webgpu-pathtracer-plugin";
@@ -37,6 +39,7 @@ namespace tinybvh
         // Set buildCWBVH to true if this is intended for GPU traversal.
         public void Build(IntPtr verticesPtr, int count)
         {
+            Debug.Log("!!!! " + libraryName);
             if (index >= 0)
                 Destroy();
 
