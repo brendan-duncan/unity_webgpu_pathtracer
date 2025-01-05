@@ -1,1 +1,0 @@
-tools/premake5.osx --file="premake5.lua" xcode4

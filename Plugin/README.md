@@ -1,21 +1,17 @@
 # unity-unity-pathtracer-plugin
-A simple wrapper for tinybvh which provides an interface for Unity.
+Wrapper for tinybvh.
 
-# Compiling for Windows
- - Run `GenerateProjectFiles.bat`
- - Open generated Visual Studio project
- - Build
- - Copy compiled DLL into Unity project under `Assets/Plugins/Windows`
+Derived from https://github.com/andr3wmac/unity-tinybvh.
 
-# Compiling for OSX
- - Run `GenerateProjectFiles.command`
- - Open generated XCode project
- - Configure for the current architecture you're compiling for
- - Build
- - Rename generated .dylib to .bundle
- - Copy the bundle into Unity project under `Assets/Plugins/OSX`
+# Build
+```
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+```
 
-# Compiling for Linux
- - Run `GenerateProjectFiles.sh`
- - Run `make`
- - Copy compiled .so into Unity project under `Assets/Plugins/Linux`
+### Windows
+```
+cp Release/unity-webgpu-pathtracer-plugin.dll ../../Assets/Plugins/Windows
+```
