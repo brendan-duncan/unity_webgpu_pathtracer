@@ -14,7 +14,7 @@ public enum TonemapMode {
 }
 
 public enum EnvironmentMode {
-    Color,
+    Environment,
     Basic,
     Physical
 }
@@ -29,7 +29,7 @@ public class PathTracer : MonoBehaviour
     public float folalLength = 10.0f;
     public float aperature = 0.0f;
     public float skyTurbidity = 1.0f;
-    public EnvironmentMode environmentMode = EnvironmentMode.Color;
+    public EnvironmentMode environmentMode = EnvironmentMode.Environment;
     public Color environmentColor = Color.white;
     public float environmentIntensity = 1.0f;
     public Texture2D environmentTexture;

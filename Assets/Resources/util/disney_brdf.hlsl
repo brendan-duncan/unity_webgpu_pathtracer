@@ -46,7 +46,7 @@ struct DisneyMaterial
     //Medium medium;
 };
 
-DisneyMaterial GetDisneyMaterial(Ray ray, inout RayHit hit)
+DisneyMaterial GetDisneyMaterial(in Ray ray, inout RayHit hit)
 {
     Material material = hit.material;
     float2 uv = hit.uv;
@@ -95,7 +95,7 @@ DisneyMaterial GetDisneyMaterial(Ray ray, inout RayHit hit)
     return disneyMaterial;
 }
 
-void TintColors(DisneyMaterial mat, float eta, out float F0, out float3 Csheen, out float3 Cspec0)
+void TintColors(in DisneyMaterial mat, float eta, out float F0, out float3 Csheen, out float3 Cspec0)
 {
     float lum = Luminance(mat.baseColor);
     float3 ctint = lum > 0.0f ? mat.baseColor / lum : 1.0f;
@@ -107,7 +107,7 @@ void TintColors(DisneyMaterial mat, float eta, out float F0, out float3 Csheen, 
     Csheen = lerp((float3)1.0f, ctint, mat.sheenTint);
 }
 
-float3 EvalDisneyDiffuse(DisneyMaterial mat, float3 Csheen, float3 V, float3 L, float3 H, out float pdf)
+float3 EvalDisneyDiffuse(in DisneyMaterial mat, float3 Csheen, float3 V, float3 L, float3 H, out float pdf)
 {
     pdf = 0.0f;
     if (L.z <= 0.0f)
@@ -140,7 +140,7 @@ float3 EvalDisneyDiffuse(DisneyMaterial mat, float3 Csheen, float3 V, float3 L, 
     }
 }
 
-float3 EvalMicrofacetReflection(DisneyMaterial mat, float3 V, float3 L, float3 H, float3 F, out float pdf)
+float3 EvalMicrofacetReflection(in DisneyMaterial mat, float3 V, float3 L, float3 H, float3 F, out float pdf)
 {
     pdf = 0.0f;
     if (L.z <= 0.0f)
@@ -158,7 +158,7 @@ float3 EvalMicrofacetReflection(DisneyMaterial mat, float3 V, float3 L, float3 H
     }
 }
 
-float3 EvalMicrofacetRefraction(DisneyMaterial mat, float eta, float3 V, float3 L, float3 H, float3 F, out float pdf)
+float3 EvalMicrofacetRefraction(in DisneyMaterial mat, float eta, float3 V, float3 L, float3 H, float3 F, out float pdf)
 {
     pdf = 0.0;
     if (L.z >= 0.0)
@@ -183,7 +183,7 @@ float3 EvalMicrofacetRefraction(DisneyMaterial mat, float eta, float3 V, float3 
     }
 }
 
-float3 EvalClearcoat(DisneyMaterial mat, float3 V, float3 L, float3 H, out float pdf)
+float3 EvalClearcoat(in DisneyMaterial mat, float3 V, float3 L, float3 H, out float pdf)
 {
     pdf = 0.0;
     if (L.z <= 0.0)
@@ -204,7 +204,7 @@ float3 EvalClearcoat(DisneyMaterial mat, float3 V, float3 L, float3 H, out float
     }
 }
 
-float3 DisneyEval(RayHit hit, DisneyMaterial mat, float3 V, float3 N, float3 L, out float pdf)
+float3 DisneyEval(in RayHit hit, in DisneyMaterial mat, float3 V, float3 N, float3 L, out float pdf)
 {
     pdf = 0.0;
     float3 f = 0.0f;
@@ -218,18 +218,12 @@ float3 DisneyEval(RayHit hit, DisneyMaterial mat, float3 V, float3 N, float3 L, 
 
     float3 H;
     if (L.z > 0.0)
-    {
         H = normalize(L + V);
-    }
     else
-    {
         H = normalize(L + V * hit.eta);
-    }
 
     if (H.z < 0.0)
-    {
         H = -H;
-    }
 
     // Tint colors
     float3 Csheen, Cspec0;
@@ -405,13 +399,9 @@ float3 DisneySample(RayHit hit, DisneyMaterial mat, float3 V, float3 N, out floa
 
         // Reflection
         if (r3 < F)
-        {
             L = normalize(reflect(-V, H));
-        }
         else // Transmission
-        {
             L = normalize(refract(-V, H, hit.eta));
-        }
     }
     else // Clearcoat
     {

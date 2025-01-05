@@ -285,18 +285,15 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
     return hit;
 }
 
-RayHit RayIntersect(Ray ray)
+RayHit RayIntersect(in Ray ray)
 {
     return RayIntersectBvh(ray, false);
 }
 
-float ShadowRayIntersect(const Ray ray)
+bool ShadowRayIntersect(in Ray ray)
 {
     RayHit hit = RayIntersectBvh(ray, true);
-    if (hit.distance < FarPlane)
-        return 0.0f;
-    else
-        return 1.0f;
+    return hit.distance < FarPlane;
 }
 
 #endif // __UNITY_PATHTRACER_BVH_HLSL__

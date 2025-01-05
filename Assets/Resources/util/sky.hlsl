@@ -3,6 +3,10 @@
 
 #include "common.hlsl"
 
+#define SKY_MODE_ENVIRONMENT 0
+#define SKY_MODE_BASIC 1
+#define SKY_MODE_PHYSICAL 2
+
 int EnvironmentMode;
 float3 EnvironmentColor;
 float EnvironmentIntensity;
@@ -80,7 +84,7 @@ float4 EvalEnvMap(float3 r, float intensity)
 #endif
 }
 
-float4 SampleEnvMap(inout float3 color, inout uint rngState)
+float4 SampleEnvMap(out float3 color, inout uint rngState)
 {
 #if HAS_ENVIRONMENT_TEXTURE
     float rnd = RandomFloat(rngState) * EnvironmentCdfSum;
@@ -103,7 +107,7 @@ float4 SampleEnvMap(inout float3 color, inout uint rngState)
 #endif
 }
 
-float4 BackgroundColor(float3 r, float intensity)
+float4 EnvironmentSky(float3 r, float intensity)
 {
 #if HAS_ENVIRONMENT_TEXTURE
     return EvalEnvMap(r, intensity);
@@ -113,11 +117,14 @@ float4 BackgroundColor(float3 r, float intensity)
 #endif
 }
 
-float4 StandardSky(float3 r, float intensity)
+// From https://raytracing.github.io/books/RayTracingInOneWeekend.html#rays,asimplecamera,andbackground/sendingraysintothescene
+float4 BasicSky(float3 r, float intensity)
 {
     float pdf = 1.0f / (4.0f * PI);
-    float yHeight = 0.5f * (-r.y + 1.0f);
-    return float4(((1.0f - yHeight) * (float3)1.0f + yHeight * float3(0.5f, 0.7f, 1.0f)) * intensity, pdf);
+    float a = saturate(0.5f * (r.y + 1.0f));
+    // Todo: Do we need to convert colors to linear space?
+    float3 color = (1.0f - a) * (float3)1.0f + a * pow(float3(0.5f, 0.7f, 1.0f), 2.2f);
+    return float4(color * intensity, pdf);
 }
 
 // From https://github.com/Nelarius/rayfinder
@@ -187,14 +194,21 @@ float SkyRadiance(float theta, float gamma, uint channel)  {
 float4 SampleSkyRadiance(float3 direction, int rayDepth)
 {
     float4 radiance = 0.0f;
-    if (EnvironmentMode == 0)
+    if (EnvironmentMode == SKY_MODE_ENVIRONMENT)
     {
         float intensity = 1.0f;
         if (rayDepth > 0)
             intensity = EnvironmentIntensity;
-        radiance = BackgroundColor(direction, intensity);
+        radiance = EnvironmentSky(direction, intensity);
     }
-    else if (EnvironmentMode == 2)
+    else if (EnvironmentMode == SKY_MODE_BASIC)
+    {
+        float intensity = 1.0f;
+        if (rayDepth > 0)
+            intensity = EnvironmentIntensity;
+        radiance = BasicSky(direction, intensity);
+    }
+    else if (EnvironmentMode == SKY_MODE_PHYSICAL)
     {
         float3 sunDirection = SkyStateBuffer[0].sunDirection;
 
@@ -213,15 +227,6 @@ float4 SampleSkyRadiance(float3 direction, int rayDepth)
             SkyRadiance(theta, gamma, 2) * scale,
             pdf
         );
-    }
-    else
-    {
-        float intensity = 1.0f;
-        if (rayDepth > 0)
-            intensity = EnvironmentIntensity;
-        radiance = StandardSky(direction, intensity);
-        if (rayDepth == 0)
-            radiance = pow(radiance, 2.2);
     }
 
     return radiance;

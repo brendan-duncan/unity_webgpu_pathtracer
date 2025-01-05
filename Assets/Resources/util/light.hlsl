@@ -105,16 +105,15 @@ float3 EvalLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, in Light ligh
     float3 Li = light.emission * falloff;
 
     Ray shadowRay = {scatterPos, lightSample.direction};
-    float shadow = ShadowRayIntersect(shadowRay);
-    bool inLight = shadow > 0.0f;
-    if (inLight)
+    bool inShadow = ShadowRayIntersect(shadowRay);
+    if (!inShadow)
     {
         float pdf;
         float3 f = DisneyEval(hit, mat, -ray.direction, hit.normal, lightSample.direction, pdf);
         float lightPdf = 1.0f;
         if (lightSample.pdf > 0.0f)
             lightPdf = lightSample.pdf;
-        float3 L = Li * f * shadow / lightPdf;
+        float3 L = Li * f / lightPdf;
         Ld += L;
     }
 
@@ -124,7 +123,7 @@ float3 EvalLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, in Light ligh
 float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint rngState)
 {
     float3 Ld = 0.0f;
-    float3 scatterPos = hit.position + hit.normal * 0.001f;
+    float3 scatterPos = hit.position + hit.normal * EPSILON;
     ScatterSampleRec scatterSample = { (float3)0.0f, (float3)0.0f, 0.0f };
 
     /*if (EnvironmentMode == 0)
@@ -135,9 +134,8 @@ float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint 
         float3 lightDir = dirPdf.xyz;
         float lightPdf = dirPdf.w;
         Ray shadowRay = {scatterPos, lightDir};
-        float shadow = ShadowRayIntersect(shadowRay);
-        bool inLight = shadow > 0.0f;
-        if (inLight)
+        bool inShadow = ShadowRayIntersect(shadowRay);
+        if (!inShadow)
         {
             scatterSample.f = DisneyEval(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
             if (scatterSample.pdf > 0.0)
@@ -152,9 +150,8 @@ float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint 
         float lightPdf = 1.0f / (4.0f * PI);
         float3 lightDir = normalize(RandomCosineHemisphere(hit.normal, rngState));
         Ray shadowRay = {scatterPos, lightDir};
-        float shadow = ShadowRayIntersect(shadowRay);
-        bool inLight = shadow > 0.0f;
-        if (inLight)
+        bool inShadow = ShadowRayIntersect(shadowRay);
+        if (!inShadow)
         {
             scatterSample.f = DisneyEval(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
             if (scatterSample.pdf > 0.0)
@@ -173,9 +170,8 @@ float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint 
         float3 Li = lightColorPdf.rgb;
         float lightPdf = lightColorPdf.w;
         Ray shadowRay = {scatterPos, lightDir};
-        float shadow = ShadowRayIntersect(shadowRay);
-        bool inLight = shadow > 0.0f;
-        if (inLight)
+        bool inShadow = ShadowRayIntersect(shadowRay);
+        if (!inShadow)
         {
             scatterSample.f = DisneyEval(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
             if (scatterSample.pdf > 0.0)
@@ -197,9 +193,8 @@ float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint 
             SkyStateBuffer[0].solarRadiances[2]
         );
         Ray shadowRay = {scatterPos, lightDir};
-        float shadow = ShadowRayIntersect(shadowRay);
-        bool inLight = shadow > 0.0f;
-        if (inLight)
+        bool inShadow = ShadowRayIntersect(shadowRay);
+        if (!inShadow)
         {
             scatterSample.f = DisneyEval(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
             if (scatterSample.pdf > 0.0)

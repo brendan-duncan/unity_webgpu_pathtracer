@@ -74,7 +74,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
 
         // Move ray origin to hit point and set direction for next bounce
         ray.direction = scatterSample.L;
-        ray.origin = hit.position + ray.direction * 0.0001f;
+        ray.origin = hit.position + ray.direction * EPSILON;
     }
 
     return radiance;
