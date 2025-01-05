@@ -1,4 +1,4 @@
-# unity-unity-pathtracer-plugin
+# Building unity-unity-pathtracer-plugin
 Wrapper for tinybvh.
 
 Derived from https://github.com/andr3wmac/unity-tinybvh.
@@ -18,5 +18,14 @@ mkdir build
 cd build
 cmake -G Xcode ..
 cmake --build . --config Release
-cmake --install .
+cmake --install . --config Release
+```
+
+### Linux
+```
+mkdir build
+cd build
+cmake ..
+cmake --build . --config Release
+cmake --install . --config Release
 ```

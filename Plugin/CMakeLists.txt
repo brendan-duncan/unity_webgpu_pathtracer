@@ -10,11 +10,15 @@ add_library(unity-webgpu-pathtracer-plugin SHARED
     ../Assets/Plugins/Web/src/plugin.cpp
 )
 
-if(WINDOWS)
-    install(TARGETS unity-webgpu-pathtracer-plugin DESTINATION ../Assets/Plugins/Windows)
-elif(APPLE)
+if(WIN32)
+    install(TARGETS unity-webgpu-pathtracer-plugin DESTINATION ${CMAKE_SOURCE_DIR}/../Assets/Plugins/Windows)
+endif()
+
+if(APPLE)
     set_target_properties(unity-webgpu-pathtracer-plugin PROPERTIES SUFFIX ".bundle")
-    install(TARGETS unity-webgpu-pathtracer-plugin DESTINATION ../Assets/Plugins/OSX)
-elif(UNIX)
-    install(TARGETS unity-webgpu-pathtracer-plugin DESTINATION ../Assets/Plugins/Linux)
+    install(TARGETS unity-webgpu-pathtracer-plugin DESTINATION ${CMAKE_SOURCE_DIR}/../Assets/Plugins/OSX)
+endif()    
+
+if(UNIX AND NOT APPLE)
+    install(TARGETS unity-webgpu-pathtracer-plugin DESTINATION ${CMAKE_SOURCE_DIR}/../Assets/Plugins/Linux)
 endif()
