@@ -3,15 +3,20 @@ Wrapper for tinybvh.
 
 Derived from https://github.com/andr3wmac/unity-tinybvh.
 
-# Build
+### Windows
 ```
 mkdir build
 cd build
 cmake ..
 cmake --build . --config Release
+cmake --install .
 ```
 
-### Windows
+## macOS
 ```
-cp Release/unity-webgpu-pathtracer-plugin.dll ../../Assets/Plugins/Windows
+mkdir build
+cd build
+cmake -G Xcode ..
+cmake --build . --config Release
+cmake --install .
 ```

@@ -6,43 +6,29 @@ namespace tinybvh
 {
     public class BVH
     {
-#if PLATFORM_WEBGL
-        [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int BuildBVH(IntPtr verticesPtr, int count);
-
-        [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern void DestroyBVH(int index);
-
-        [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool IsBVHReady(int index);
-
-        [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetCWBVHNodesSize(int index);
-        
-        [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern int GetCWBVHTrisSize(int index);
-
-        [DllImport("__Internal", CallingConvention = CallingConvention.Cdecl)]
-        private static extern bool GetCWBVHData(int index, out IntPtr bvhNodes, out IntPtr bvhTris);
+#if UNITY_WEBGL || UNITY_IPHONE || UNITY_IOS
+        const string libraryName = "__Internal";
 #else
-        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
+        const string libraryName = "unity-webgpu-pathtracer-plugin";
+#endif
+            
+        [DllImport(libraryName)]
         private static extern int BuildBVH(IntPtr verticesPtr, int count);
 
-        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(libraryName)]
         private static extern void DestroyBVH(int index);
 
-        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(libraryName)]
         private static extern bool IsBVHReady(int index);
 
-        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(libraryName)]
         private static extern int GetCWBVHNodesSize(int index);
         
-        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(libraryName)]
         private static extern int GetCWBVHTrisSize(int index);
 
-        [DllImport("unity-webgpu-pathtracer-plugin", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(libraryName)]
         private static extern bool GetCWBVHData(int index, out IntPtr bvhNodes, out IntPtr bvhTris);
-#endif
 
         // Index of the BVH internal to the plugin.
         private int index = -1;

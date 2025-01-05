@@ -42,7 +42,7 @@ tinybvh::BVH8_CWBVH* GetBVH(int index)
     return nullptr;
 }
 
-int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount)
+extern "C" int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount)
 {
     tinybvh::BVH8_CWBVH* cwbvh = new tinybvh::BVH8_CWBVH();
     //cwbvh->BuildHQ(vertices, triangleCount);
@@ -51,7 +51,7 @@ int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount)
     return AddBVH(cwbvh);
 }
 
-void DestroyBVH(int index) 
+extern "C" void DestroyBVH(int index) 
 {
     //std::lock_guard<std::mutex> lock(gBVHMutex);
     if (index >= 0 && index < static_cast<int>(gBVHs.size())) 
@@ -64,25 +64,25 @@ void DestroyBVH(int index)
     }
 }
 
-bool IsBVHReady(int index)
+extern "C" bool IsBVHReady(int index)
 {
     tinybvh::BVH8_CWBVH* bvh = GetBVH(index);
     return (bvh != nullptr);
 }
 
-int GetCWBVHNodesSize(int index)
+extern "C" int GetCWBVHNodesSize(int index)
 {
     tinybvh::BVH8_CWBVH* bvh = GetBVH(index);
     return bvh != nullptr ? bvh->usedBlocks * 16 : 0;
 }
 
-int GetCWBVHTrisSize(int index) 
+extern "C" int GetCWBVHTrisSize(int index) 
 {
     tinybvh::BVH8_CWBVH* bvh = GetBVH(index);
     return bvh != nullptr ? bvh->triCount * 3 * 16 : 0;
 }
 
-bool GetCWBVHData(int index, tinybvh::bvhvec4** bvhNodes, tinybvh::bvhvec4** bvhTris) 
+extern "C" bool GetCWBVHData(int index, tinybvh::bvhvec4** bvhNodes, tinybvh::bvhvec4** bvhTris) 
 {
     tinybvh::BVH8_CWBVH* bvh = GetBVH(index);
     if (bvh == nullptr)
