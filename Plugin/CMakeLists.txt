@@ -8,11 +8,7 @@ add_library(unity-webgpu-pathtracer-plugin SHARED
     "../Assets/Plugins/Web/src/plugin.cpp"
 )
 
-if(WIN32)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ../Assets/Plugins/Windows)
-elseif(APPLE)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ../Assets/Plugins/OSX)
-
-elseif(UNIX)
-    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ../Assets/Plugins/Linux)
+if(APPLE)
+    add_library(unity-webgpu-pathtracer-plugin MODULE ${SRCS})
+    set_target_properties(unity-webgpu-pathtracer-plugin PROPERTIES BUNDLE TRUE)
 endif()
