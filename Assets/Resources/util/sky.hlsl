@@ -14,6 +14,7 @@ StructuredBuffer<float> EnvironmentCDF;
 int EnvironmentTextureWidth;
 int EnvironmentTextureHeight;
 float EnvironmentCdfSum;
+float EnvironmentMapRotation;
 #endif
 
 #define TERRESTRIAL_SOLAR_RADIUS (0.255f * DEGREES_TO_RADIANS)
@@ -30,13 +31,9 @@ float2 BinarySearch(float value)
         int mid = (lower + upper) >> 1;
         int idx = mid * EnvironmentTextureWidth + EnvironmentTextureWidth - 1;
         if (value < EnvironmentCDF[idx])
-        {
             upper = mid;
-        }
         else
-        {
             lower = mid + 1;
-        }
     }
 
     int y = clamp(lower, 0, EnvironmentTextureHeight - 1);
@@ -48,13 +45,9 @@ float2 BinarySearch(float value)
         int mid = (lower + upper) >> 1;
         int idx = y * EnvironmentTextureWidth + mid;
         if (value < EnvironmentCDF[idx])
-        {
             upper = mid;
-        }
         else
-        {
             lower = mid + 1;
-        }
     }
 
     int x = clamp(lower, 0, EnvironmentTextureWidth - 1);
@@ -69,10 +62,8 @@ float4 EvalEnvMap(float3 r, float intensity)
 #if HAS_ENVIRONMENT_TEXTURE
     float theta = acos(clamp(r.y, -1.0, 1.0));
     float r_atan = atan2(r.z, r.x);
-    float2 uv = float2((PI + r_atan) * INV_TWO_PI, 1.0f - theta * INV_PI);// + float2(envMapRot, 0.0);
+    float2 uv = float2((PI + r_atan) * INV_TWO_PI, 1.0f - theta * INV_PI) + float2(EnvironmentMapRotation, 0.0);
 
-    //uv.x = fmod(abs(uv.x), 1.0f);
-    //uv.y = fmod(abs(uv.y), 1.0f);
     uv.x = fmod(uv.x, 1.0f);
     uv.y = fmod(uv.y, 1.0f);
     if (uv.x < 0.0f)
@@ -98,16 +89,15 @@ float4 SampleEnvMap(inout float3 color, inout uint rngState)
     color = EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
     float pdf = Luminance(color) / EnvironmentCdfSum;
 
-    //uv.x -= envMapRot;
+    uv.x -= EnvironmentMapRotation;
     float phi = uv.x * TWO_PI;
     float theta = uv.y * PI;
 
-    if (sin(theta) == 0.0)
-    {
+    float sinTheta = sin(theta);
+    if (sinTheta == 0.0)
         pdf = 0.0;
-    }
 
-    return float4(-sin(theta) * cos(phi), cos(theta), -sin(theta) * sin(phi), (pdf * EnvironmentTextureWidth * EnvironmentTextureHeight) / (TWO_PI * PI * sin(theta)));
+    return float4(-sinTheta * cos(phi), cos(theta), -sinTheta * sin(phi), (pdf * EnvironmentTextureWidth * EnvironmentTextureHeight) / (TWO_PI * PI * sinTheta));
 #else
   return 0.0f;
 #endif
@@ -204,7 +194,7 @@ float4 SampleSkyRadiance(float3 direction, int rayDepth)
             intensity = EnvironmentIntensity;
         radiance = BackgroundColor(direction, intensity);
     }
-    else if (EnvironmentMode == 1)
+    else if (EnvironmentMode == 2)
     {
         float3 sunDirection = SkyStateBuffer[0].sunDirection;
 
@@ -230,6 +220,8 @@ float4 SampleSkyRadiance(float3 direction, int rayDepth)
         if (rayDepth > 0)
             intensity = EnvironmentIntensity;
         radiance = StandardSky(direction, intensity);
+        if (rayDepth == 0)
+            radiance = pow(radiance, 2.2);
     }
 
     return radiance;

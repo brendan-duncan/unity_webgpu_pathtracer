@@ -4,6 +4,7 @@
 #include "bvh.hlsl"
 #include "common.hlsl"
 #include "disney_brdf.hlsl"
+#include "light.hlsl"
 #include "material.hlsl"
 #include "ray.hlsl"
 #include "sky.hlsl"
@@ -46,9 +47,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
         radiance += material.emission * throughput;
 
         if (rayDepth == maxRayBounces)
-        {
             break;
-        }
 
         surfaceScatter = true;
 
@@ -62,7 +61,8 @@ float3 PathTrace(Ray ray, inout uint rngState)
         else
         {
             // Next event estimation
-            //radiance += DirectLight(ray, hit, true) * throughput;
+            radiance += DirectLight(ray, hit, material, rngState) * throughput;
+            //return radiance;
 
             // Sample BSDF for color and outgoing direction
             scatterSample.f = DisneySample(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngState);

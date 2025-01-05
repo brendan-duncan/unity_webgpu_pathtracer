@@ -86,29 +86,6 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
     }
 }
 
-RayHit RayIntersectAll(Ray ray)
-{
-    RayHit hit = (RayHit)0;
-    hit.distance = FarPlane;
-
-    for (int i = 0; i < TriangleCount; i += 3)
-    {
-        IntersectTriangle(i, ray, hit);
-    }
-
-    if (hit.distance < FarPlane)
-    {
-        TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
-        hit.position = ray.origin + hit.distance * ray.direction;
-        hit.material = Materials[triAttr.materialIndex];
-        hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
-        hit.tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
-        hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
-    }
-
-    return hit;
-}
-
 // Nodes in CWBVH format.
 struct BVHNode
 {
@@ -311,10 +288,9 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
 RayHit RayIntersect(Ray ray)
 {
     return RayIntersectBvh(ray, false);
-    //return RayIntersectAll(ray);
 }
 
-float ShadowRay(const Ray ray)
+float ShadowRayIntersect(const Ray ray)
 {
     RayHit hit = RayIntersectBvh(ray, true);
     if (hit.distance < FarPlane)

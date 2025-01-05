@@ -11,11 +11,13 @@ public class BVHScene
 {
     MeshRenderer[] meshRenderers;
     ComputeShader meshProcessingShader;
+
     LocalKeyword hasIndexBufferKeyword;
     LocalKeyword has32BitIndicesKeyword;
     LocalKeyword hasNormalsKeyword;
     LocalKeyword hasUVsKeyword;
     LocalKeyword hasTangentsKeyword;
+    LocalKeyword hasLightsKeyword;
 
     int totalVertexCount = 0;
     int totalTriangleCount = 0;
@@ -75,11 +77,6 @@ public class BVHScene
         materialsBuffer?.Release();
         textureDescriptorBuffer?.Release();
         textureDataBuffer?.Release();
-    }
-
-    public tinybvh.BVH GetBVH()
-    {
-        return sceneBVH;
     }
 
     public void Update()
@@ -502,26 +499,16 @@ public class BVHScene
             IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexPositionBufferCPU);
         #endif
         
-        // Build BVH in thread.
-        #if !PLATFORM_WEBGL
-        //Thread thread = new Thread(() => {
-        #endif
-            DateTime bvhStartTime = DateTime.UtcNow;
-            sceneBVH.Build(dataPointer, totalTriangleCount);
-            TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
+        DateTime bvhStartTime = DateTime.UtcNow;
+        sceneBVH.Build(dataPointer, totalTriangleCount);
+        TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 
-            Debug.Log("BVH built in: " + bvhTime.TotalMilliseconds + "ms");
+        Debug.Log("BVH built in: " + bvhTime.TotalMilliseconds + "ms");
 
-            #if UNITY_EDITOR
-                persistentBuffer.Dispose();
-            #endif
-        #if !PLATFORM_WEBGL
-        //});
+        #if UNITY_EDITOR
+            persistentBuffer.Dispose();
         #endif
 
         buildingBVH = true;
-        #if !PLATFORM_WEBGL
-        //thread.Start();
-        #endif
     }
 }

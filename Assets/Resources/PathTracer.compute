@@ -2,6 +2,7 @@
 
 #pragma multi_compile __ HAS_TEXTURES
 #pragma multi_compile __ HAS_ENVIRONMENT_TEXTURE
+#pragma multi_compile __ HAS_LIGHTS
 
 #include "util/camera.hlsl"
 #include "util/common.hlsl"
@@ -10,8 +11,6 @@
 #include "util/ray.hlsl"
 
 int SamplesPerPass;
-
-//#define NUM_SAMPLES 1
 
 // Using a 2D dispatch causes a warning for exceeding the number of temp variable registers.
 [numthreads(128, 1, 1)]

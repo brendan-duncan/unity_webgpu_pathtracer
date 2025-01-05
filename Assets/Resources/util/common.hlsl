@@ -14,6 +14,11 @@ float Luminance(float3 color)
     return dot(color, float3(0.299f, 0.587f, 0.114f));
 }
 
+float Sqr(float x)
+{
+    return x * x;
+}
+
 uint MaxRayBounces;
 uint CurrentSample;
 float FarPlane;
@@ -35,7 +40,7 @@ struct LightSampleRec
     float3 normal;
     float3 emission;
     float3 direction;
-    float dist;
+    float distance;
     float pdf;
 };
 

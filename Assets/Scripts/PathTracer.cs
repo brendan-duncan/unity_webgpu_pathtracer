@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -32,12 +33,14 @@ public class PathTracer : MonoBehaviour
     public Color environmentColor = Color.white;
     public float environmentIntensity = 1.0f;
     public Texture2D environmentTexture;
+    public float environmentMapRotation = 0.0f;
     public float exposure = 1.0f;
     public TonemapMode tonemapMode = TonemapMode.Lottes;
     public bool sRGB = false;
 
     LocalKeyword _hasTexturesKeyword;
     LocalKeyword _hasEnvironmentTextureKeyword;
+    LocalKeyword _hasLightsKeyword;
 
     Camera _camera;
     BVHScene _bvhScene;
@@ -57,6 +60,7 @@ public class PathTracer : MonoBehaviour
     NativeArray<Color> _envTextureCPU;
     RenderTexture _envTextureCopy;
     bool _environmentTextureReady = false;
+    float _lastEnvironmentMapRotation = 0.0f;
     
     int _currentRT = 0;
     int _currentSample = 0;
@@ -64,9 +68,15 @@ public class PathTracer : MonoBehaviour
     Vector3 _lightDirection = new Vector3(1.0f, 1.0f, 1.0f).normalized;
     Vector4 _lightColor = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 
+    Light[] _lights;
+    ComputeBuffer _lightBuffer;
+    float[] _lightData;
+    int _lightCount = 0;
+
     // Struct sizes in bytes
     const int RayStructSize = 24;
     const int RayHitStructSize = 20;
+    const int LightStructSize = 16;
 
     void Start()
     {
@@ -86,6 +96,9 @@ public class PathTracer : MonoBehaviour
 
         _hasTexturesKeyword = _pathTracerShader.keywordSpace.FindKeyword("HAS_TEXTURES");
         _hasEnvironmentTextureKeyword = _pathTracerShader.keywordSpace.FindKeyword("HAS_ENVIRONMENT_TEXTURE");
+        _hasLightsKeyword = _pathTracerShader.keywordSpace.FindKeyword("HAS_LIGHTS");
+
+        _lastEnvironmentMapRotation = environmentMapRotation;
 
         //bool hasLight = false;
         Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
@@ -119,15 +132,14 @@ public class PathTracer : MonoBehaviour
             // There are a lot of restrictions for texture format types, partuclarly for compressed formats.
             // Blit the teture to a render texture, which decompressed any potentially compressed formats.
             // AsyncGPUReadback then needs to be used to copy the GPU texture to the CPU.
-            Utilities.PrepareRenderTexture(ref _envTextureCopy, environmentTexture.width, environmentTexture.height, RenderTextureFormat.ARGBHalf);
+            Utilities.PrepareRenderTexture(ref _envTextureCopy, environmentTexture.width, environmentTexture.height, RenderTextureFormat.ARGBFloat);//RenderTextureFormat.ARGBHalf);
             Graphics.Blit(environmentTexture, _envTextureCopy);
 
             _pathTracerShader.SetTexture(0, "EnvironmentTexture", _envTextureCopy);
-
             
             _envTextureCPU = new NativeArray<Color>(environmentTexture.width * environmentTexture.height, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             const int mipLevel = 0;
-            const TextureFormat format = TextureFormat.RGBAHalf;
+            const TextureFormat format = TextureFormat.RGBAFloat;
             AsyncGPUReadback.RequestIntoNativeArray(ref _envTextureCPU, _envTextureCopy, mipLevel, format, OnEnvTexReadback);
         }
         else
@@ -135,6 +147,8 @@ public class PathTracer : MonoBehaviour
             _environmentTextureReady = true;
             _pathTracerShader.DisableKeyword(_hasEnvironmentTextureKeyword);
         }
+
+        UpdateLights();
     }
 
     unsafe void OnEnvTexReadback(AsyncGPUReadbackRequest request)
@@ -162,7 +176,7 @@ public class PathTracer : MonoBehaviour
             _environmentCdfBuffer.SetData(cdf);
             _pathTracerShader.SetInt("EnvironmentTextureWidth", environmentTexture.width);
             _pathTracerShader.SetInt("EnvironmentTextureHeight", environmentTexture.height);
-            _pathTracerShader.SetBuffer(0, "EnvironmentCdf", _environmentCdfBuffer);
+            _pathTracerShader.SetBuffer(0, "EnvironmentCDF", _environmentCdfBuffer);
             _pathTracerShader.SetFloat("EnvironmentCdfSum", sum);
             _environmentTextureReady = true;
 
@@ -182,10 +196,17 @@ public class PathTracer : MonoBehaviour
         _environmentCdfBuffer?.Release();
         _envTextureCopy?.Release();
         _envTextureCopy = null;
+        _lightBuffer?.Release();
     }
 
     void Update()
     {
+        if (_lastEnvironmentMapRotation != environmentMapRotation)
+        {
+            _lastEnvironmentMapRotation = environmentMapRotation;
+            Reset();
+        }
+        UpdateLights();
         _bvhScene.Update();
         _pathTracerShader.SetKeyword(_hasTexturesKeyword, _bvhScene.HasTextures());
     }
@@ -193,6 +214,90 @@ public class PathTracer : MonoBehaviour
     public void Reset()
     {
         _currentSample = 0;
+    }
+
+    public void UpdateLights()
+    {
+        _lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+        if (_lights.Length == 0)
+        {
+            _pathTracerShader.DisableKeyword(_hasLightsKeyword);
+            if (_lightCount > 0)
+            {
+                _lightBuffer.Release();
+                _lightBuffer = null;
+                _lightCount = 0;
+                Reset();
+            }
+            return;
+        }
+
+        if (_lightBuffer != null && _lightCount != _lights.Length)
+        {
+            _lightBuffer.Release();
+            _lightBuffer = null;
+            Reset();
+        }
+
+        Utilities.PrepareBuffer(ref _lightBuffer, _lights.Length, LightStructSize * 4);
+
+        if (_lightData == null || _lightCount != _lights.Length) {
+            _lightData = new float[_lights.Length * LightStructSize];
+            Reset();
+        }
+
+        bool dirty = false;
+
+        _lightCount = _lights.Length;
+        for (int i = 0; i < _lights.Length; ++i)
+        {
+            Light light = _lights[i];
+            int li = i * LightStructSize;
+
+            Vector3 lightPosition = light.transform.position;
+            Vector3 u = light.transform.right.normalized * light.areaSize.x;
+            Vector3 v = light.transform.up.normalized * light.areaSize.y; 
+            float area = light.areaSize.x * light.areaSize.y;
+
+            if (_lightData[li + 0] != lightPosition.x || _lightData[li + 1] != lightPosition.y || _lightData[li + 2] != lightPosition.z ||
+                _lightData[li + 3] != (float)light.type || _lightData[li + 4] != light.color.r * light.intensity ||
+                _lightData[li + 5] != light.color.g * light.intensity || _lightData[li + 6] != light.color.b * light.intensity ||
+                _lightData[li + 7] != light.range || _lightData[li + 8] != u.x || _lightData[li + 9] != u.y || _lightData[li + 10] != u.z ||
+                _lightData[li + 11] != area || _lightData[li + 12] != v.x || _lightData[li + 13] != v.y || _lightData[li + 14] != v.z)
+            {
+                dirty = true;
+            }
+
+            _lightData[li + 0] = lightPosition.x;
+            _lightData[li + 1] = lightPosition.y;
+            _lightData[li + 2] = lightPosition.z;
+            _lightData[li + 3] = (float)light.type;
+
+            _lightData[li + 4] = light.color.r * light.intensity;
+            _lightData[li + 5] = light.color.g * light.intensity;
+            _lightData[li + 6] = light.color.b * light.intensity;
+            _lightData[li + 7] = light.range;
+
+            _lightData[li + 8] = u.x;
+            _lightData[li + 9] = u.y;
+            _lightData[li + 10] = u.z;
+            _lightData[li + 11] = area;
+
+            _lightData[li + 12] = v.x;
+            _lightData[li + 13] = v.y;
+            _lightData[li + 14] = v.z;
+            _lightData[li + 15] = light.spotAngle;
+        }
+
+        if (dirty)
+        {
+            _lightBuffer.SetData(_lightData);
+            Reset();
+        }
+
+        _pathTracerShader.EnableKeyword(_hasLightsKeyword);
+        _pathTracerShader.SetInt("LightCount", _lights.Length);
+        _pathTracerShader.SetBuffer(0, "Lights", _lightBuffer);
     }
 
     public void UpdateMaterialData()
@@ -317,5 +422,6 @@ public class PathTracer : MonoBehaviour
         _cmd.SetComputeIntParam(shader, "EnvironmentMode", (int)environmentMode);
         _cmd.SetComputeFloatParam(shader, "EnvironmentIntensity", environmentIntensity);
         _cmd.SetComputeVectorParam(shader, "EnvironmentColor", environmentColor);
+        _cmd.SetComputeFloatParam(shader, "EnvironmentMapRotation", environmentMapRotation);
     }
 }
