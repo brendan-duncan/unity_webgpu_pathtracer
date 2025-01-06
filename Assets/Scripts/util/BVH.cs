@@ -39,7 +39,6 @@ namespace tinybvh
         // Set buildCWBVH to true if this is intended for GPU traversal.
         public void Build(IntPtr verticesPtr, int count)
         {
-            Debug.Log("!!!! " + libraryName);
             if (index >= 0)
                 Destroy();
 

@@ -132,7 +132,8 @@ public class PathTracer : MonoBehaviour
             // There are a lot of restrictions for texture format types, partuclarly for compressed formats.
             // Blit the teture to a render texture, which decompressed any potentially compressed formats.
             // AsyncGPUReadback then needs to be used to copy the GPU texture to the CPU.
-            Utilities.PrepareRenderTexture(ref _envTextureCopy, environmentTexture.width, environmentTexture.height, RenderTextureFormat.ARGBFloat);//RenderTextureFormat.ARGBHalf);
+            // TODO This adds quite a bit to the start-up time, we could check if the texture is read-write and already ARGBFloat and read it directly.
+            Utilities.PrepareRenderTexture(ref _envTextureCopy, environmentTexture.width, environmentTexture.height, RenderTextureFormat.ARGBFloat);
             Graphics.Blit(environmentTexture, _envTextureCopy);
 
             _pathTracerShader.SetTexture(0, "EnvironmentTexture", _envTextureCopy);
@@ -322,8 +323,6 @@ public class PathTracer : MonoBehaviour
         // Using a 1D dispatch instead.
         int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
         int dispatchY = 1;
-        //int dispatchX = Mathf.CeilToInt(_outputWidth / 16.0f);
-        //int dispatchY = Mathf.CeilToInt(_outputHeight / 16.0f);
 
         if (_currentSample < maxSamples)
         {
