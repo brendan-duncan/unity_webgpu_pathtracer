@@ -59,6 +59,7 @@ public class PathTracer : MonoBehaviour
     ComputeBuffer _environmentCdfBuffer;
     NativeArray<Color> _envTextureCPU;
     RenderTexture _envTextureCopy;
+    DateTime _environmentReadbackStartTime;
     bool _environmentTextureReady = false;
     float _lastEnvironmentMapRotation = 0.0f;
     
@@ -125,6 +126,7 @@ public class PathTracer : MonoBehaviour
 
         if (environmentTexture != null)
         {
+            _environmentReadbackStartTime = DateTime.Now;
             _environmentTextureReady = false;
             _pathTracerShader.EnableKeyword(_hasEnvironmentTextureKeyword);
 
@@ -163,7 +165,10 @@ public class PathTracer : MonoBehaviour
 
         if (request.done)
         {
-            Debug.Log("EnvironmentTexture GPU readback completed.");
+            DateTime endTime = DateTime.Now;
+            TimeSpan duration = endTime - _environmentReadbackStartTime;
+
+            Debug.Log($"EnvironmentTexture GPU readback completed in {duration.TotalMilliseconds:n0}ms");
             var data = request.GetData<Color>();
 
             _environmentCdfBuffer = new ComputeBuffer(data.Length, 4);
@@ -242,7 +247,8 @@ public class PathTracer : MonoBehaviour
 
         Utilities.PrepareBuffer(ref _lightBuffer, _lights.Length, LightStructSize * 4);
 
-        if (_lightData == null || _lightCount != _lights.Length) {
+        if (_lightData == null || _lightCount != _lights.Length)
+        {
             _lightData = new float[_lights.Length * LightStructSize];
             Reset();
         }

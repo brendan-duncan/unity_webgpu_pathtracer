@@ -9,193 +9,173 @@ using UnityEngine.Experimental.Rendering;
 
 public class BVHScene
 {
-    MeshRenderer[] meshRenderers;
-    ComputeShader meshProcessingShader;
+    ComputeShader _meshProcessingShader;
 
-    LocalKeyword hasIndexBufferKeyword;
-    LocalKeyword has32BitIndicesKeyword;
-    LocalKeyword hasNormalsKeyword;
-    LocalKeyword hasUVsKeyword;
-    LocalKeyword hasTangentsKeyword;
-    LocalKeyword hasLightsKeyword;
+    LocalKeyword _hasIndexBufferKeyword;
+    LocalKeyword _has32BitIndicesKeyword;
+    LocalKeyword _hasNormalsKeyword;
+    LocalKeyword _hasUVsKeyword;
+    LocalKeyword _hasTangentsKeyword;
+    LocalKeyword _hasLightsKeyword;
 
-    int totalVertexCount = 0;
-    int totalTriangleCount = 0;
-    DateTime readbackStartTime;
+    int _totalVertexCount = 0;
+    int _totalTriangleCount = 0;
+    DateTime _readbackStartTime;
+    ComputeBuffer _vertexPositionBufferGPU;
+    NativeArray<Vector4> _vertexPositionBufferCPU;
+    ComputeBuffer _triangleAttributesBuffer;
+    ComputeBuffer _materialsBuffer;
 
-    ComputeBuffer vertexPositionBufferGPU;
-    NativeArray<Vector4> vertexPositionBufferCPU;
-    ComputeBuffer triangleAttributesBuffer;
-    ComputeBuffer materialsBuffer;
-
-    ComputeShader textureCopyShader;
-    ComputeBuffer textureDescriptorBuffer;
-    ComputeBuffer textureDataBuffer;
+    ComputeShader _textureCopyShader;
+    ComputeBuffer _textureDescriptorBuffer;
+    ComputeBuffer _textureDataBuffer;
 
     // BVH data
-    public tinybvh.BVH sceneBVH;
-    bool buildingBVH = false;
-    ComputeBuffer bvhNodes;
-    ComputeBuffer bvhTris;
+    ComputeBuffer _bvhNodesBuffer;
+    ComputeBuffer _bvhTrianglesBuffer;
 
-    List<Material> materials = new();
+    List<Material> _materials = new();
 
     // Struct sizes in bytes
-    const int VertexPositionSize = 16;
-    const int TriangleAttributeSize = 100;
-    const int BVHNodeSize = 80;
-    const int BVHTriSize = 16;
+    const int kVertexPositionSize = 16;
+    const int kTriangleAttributeSize = 100;
+    const int kBVHNodeSize = 80;
+    const int kBVHTriSize = 16;
     // Number of float/uint values in material.hlsl
-    const int MaterialSize = 28;
-    const int TextureOffset = 24;
+    const int kMaterialSize = 28;
+    const int kTextureOffset = 24;
 
     public void Start()
     {
-        sceneBVH = new tinybvh.BVH();
-
         // Load compute shader
-        meshProcessingShader = Resources.Load<ComputeShader>("MeshProcessing");
-        hasIndexBufferKeyword = meshProcessingShader.keywordSpace.FindKeyword("HAS_INDEX_BUFFER");
-        has32BitIndicesKeyword = meshProcessingShader.keywordSpace.FindKeyword("HAS_32_BIT_INDICES");
-        hasNormalsKeyword = meshProcessingShader.keywordSpace.FindKeyword("HAS_NORMALS");
-        hasUVsKeyword = meshProcessingShader.keywordSpace.FindKeyword("HAS_UVS");
-        hasTangentsKeyword = meshProcessingShader.keywordSpace.FindKeyword("HAS_TANGENTS");
+        _meshProcessingShader = Resources.Load<ComputeShader>("MeshProcessing");
+        _hasIndexBufferKeyword = _meshProcessingShader.keywordSpace.FindKeyword("HAS_INDEX_BUFFER");
+        _has32BitIndicesKeyword = _meshProcessingShader.keywordSpace.FindKeyword("HAS_32_BIT_INDICES");
+        _hasNormalsKeyword = _meshProcessingShader.keywordSpace.FindKeyword("HAS_NORMALS");
+        _hasUVsKeyword = _meshProcessingShader.keywordSpace.FindKeyword("HAS_UVS");
+        _hasTangentsKeyword = _meshProcessingShader.keywordSpace.FindKeyword("HAS_TANGENTS");
 
-        textureCopyShader = Resources.Load<ComputeShader>("CopyTextureData");
+        _textureCopyShader = Resources.Load<ComputeShader>("CopyTextureData");
 
+        //ProcessMeshes2();
         ProcessMeshes();
     }
 
     public void OnDestroy()
     {
-        vertexPositionBufferGPU?.Release();
-        triangleAttributesBuffer?.Release();
-        vertexPositionBufferCPU.Dispose();
-        sceneBVH?.Destroy();
-        bvhNodes?.Release();
-        bvhTris?.Release();
-        materialsBuffer?.Release();
-        textureDescriptorBuffer?.Release();
-        textureDataBuffer?.Release();
+        _vertexPositionBufferGPU?.Release();
+        _triangleAttributesBuffer?.Release();
+        _vertexPositionBufferCPU.Dispose();
+        _bvhNodesBuffer?.Release();
+        _bvhTrianglesBuffer?.Release();
+        _materialsBuffer?.Release();
+        _textureDescriptorBuffer?.Release();
+        _textureDataBuffer?.Release();
+
+        _vertexPositionBufferGPU2?.Release();
+        _triangleAttributesBuffer2?.Release();
+        _vertexPositionBufferCPU2.Dispose();
+        _bvhNodesBuffer2?.Release();
+        _bvhTrianglesBuffer2?.Release();
     }
 
     public void Update()
     {
-        if (buildingBVH && sceneBVH.IsReady())
-        {
-            Debug.Log("BVH Uploaded");
-            // Get the sizes of the arrays
-            int nodesSize = sceneBVH.GetCWBVHNodesSize();
-            int trisSize = sceneBVH.GetCWBVHTrisSize();
-
-            IntPtr nodesPtr, trisPtr;
-            if (sceneBVH.GetCWBVHData(out nodesPtr, out trisPtr))
-            {
-                Utilities.UploadFromPointer(ref bvhNodes, nodesPtr, nodesSize, BVHNodeSize);
-                Utilities.UploadFromPointer(ref bvhTris, trisPtr, trisSize, BVHTriSize);
-            } 
-            else
-            {
-                Debug.LogError("Failed to fetch updated BVH data.");
-            }
-
-            buildingBVH = false;
-        }
     }
 
     public bool CanRender()
     {
-        return (bvhNodes != null && bvhTris != null);
+        return _bvhNodesBuffer != null && _bvhTrianglesBuffer != null;
     }
 
     public bool HasTextures()
     {
-        return textureDataBuffer != null;
+        return _textureDataBuffer != null;
     }
 
     public void PrepareShader(CommandBuffer cmd, ComputeShader shader, int kernelIndex)
     {
-        if (bvhNodes == null || bvhTris == null || triangleAttributesBuffer == null)
+        if (_bvhNodesBuffer == null || _bvhTrianglesBuffer == null || _triangleAttributesBuffer == null)
             return;
 
-        cmd.SetComputeBufferParam(shader, kernelIndex, "BVHNodes", bvhNodes);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "BVHTris", bvhTris);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "TriangleAttributesBuffer", triangleAttributesBuffer);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", materialsBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "BVHNodes", _bvhNodesBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "BVHTris", _bvhTrianglesBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "TriangleAttributesBuffer", _triangleAttributesBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", _materialsBuffer);
         cmd.SetComputeIntParam(shader, "TriangleCount", 2);
 
-        if (textureDataBuffer != null)
+        if (_textureDataBuffer != null)
         {
-            cmd.SetComputeBufferParam(shader, kernelIndex, "TextureDescriptors", textureDescriptorBuffer);
-            cmd.SetComputeBufferParam(shader, kernelIndex, "TextureData", textureDataBuffer);
+            cmd.SetComputeBufferParam(shader, kernelIndex, "TextureDescriptors", _textureDescriptorBuffer);
+            cmd.SetComputeBufferParam(shader, kernelIndex, "TextureData", _textureDataBuffer);
         }
     }
 
     public void UpdateMaterialData(bool updateTextures)
     {
         List<Texture> textures = new();
-        float[] materialData = new float[materials.Count * MaterialSize];
-        for (int i = 0; i < materials.Count; i++)
+        float[] materialData = new float[_materials.Count * kMaterialSize];
+        for (int i = 0; i < _materials.Count; i++)
         {
             Color baseColor = 
-                materials[i].HasProperty("_Color") ? materials[i].color
-                : materials[i].HasProperty("baseColorFactor") ? materials[i].GetColor("baseColorFactor")
+                _materials[i].HasProperty("_Color") ? _materials[i].color
+                : _materials[i].HasProperty("baseColorFactor") ? _materials[i].GetColor("baseColorFactor")
                 : new Color(0.8f, 0.8f, 0.8f, 1.0f);
             Color emission = 
-                materials[i].HasProperty("_EmissionColor") ? materials[i].GetColor("_EmissionColor")
-                : materials[i].HasProperty("emissiveFactor") ? materials[i].GetColor("emissiveFactor")
+                _materials[i].HasProperty("_EmissionColor") ? _materials[i].GetColor("_EmissionColor")
+                : _materials[i].HasProperty("emissiveFactor") ? _materials[i].GetColor("emissiveFactor")
                 : Color.black;
             float metallic = 
-                materials[i].HasProperty("_Metallic") ? materials[i].GetFloat("_Metallic")
-                : materials[i].HasProperty("metallicFactor") ? materials[i].GetFloat("metallicFactor")
+                _materials[i].HasProperty("_Metallic") ? _materials[i].GetFloat("_Metallic")
+                : _materials[i].HasProperty("metallicFactor") ? _materials[i].GetFloat("metallicFactor")
                 : 0.0f;
             float roughness =
-                materials[i].HasProperty("_Glossiness") ? 1.0f - materials[i].GetFloat("_Glossiness")
-                : materials[i].HasProperty("roughnessFactor") ? materials[i].GetFloat("roughnessFactor")
+                _materials[i].HasProperty("_Glossiness") ? 1.0f - _materials[i].GetFloat("_Glossiness")
+                : _materials[i].HasProperty("roughnessFactor") ? _materials[i].GetFloat("roughnessFactor")
                 : 0.0f;
             float ior = 
-                materials[i].HasProperty("_IOR") ? materials[i].GetFloat("_IOR")
-                : materials[i].HasProperty("ior") ? materials[i].GetFloat("ior")
+                _materials[i].HasProperty("_IOR") ? _materials[i].GetFloat("_IOR")
+                : _materials[i].HasProperty("ior") ? _materials[i].GetFloat("ior")
                 : 1.0f;
             float normalScale = 
-                materials[i].HasProperty("_BumpScale") ? materials[i].GetFloat("_BumpScale")
-                : materials[i].HasProperty("normalScale") ? materials[i].GetFloat("normalScale")
+                _materials[i].HasProperty("_BumpScale") ? _materials[i].GetFloat("_BumpScale")
+                : _materials[i].HasProperty("normalScale") ? _materials[i].GetFloat("normalScale")
                 : 1.0f;
             int alphaMode = 
-                materials[i].HasProperty("_Mode") ? ((int)materials[i].GetFloat("_Mode") == 1 ? 2 : 0)
-                : materials[i].HasProperty("alphaMode") ? (int)materials[i].GetFloat("alphaMode")
+                _materials[i].HasProperty("_Mode") ? ((int)_materials[i].GetFloat("_Mode") == 1 ? 2 : 0)
+                : _materials[i].HasProperty("alphaMode") ? (int)_materials[i].GetFloat("alphaMode")
                 : 0;
             float alphaCutoff = 
-                materials[i].HasProperty("_Cutoff") ? materials[i].GetFloat("_Cutoff")
-                : materials[i].HasProperty("alphaCutoff") ? materials[i].GetFloat("alphaCutoff")
+                _materials[i].HasProperty("_Cutoff") ? _materials[i].GetFloat("_Cutoff")
+                : _materials[i].HasProperty("alphaCutoff") ? _materials[i].GetFloat("alphaCutoff")
                 : 0.5f;
             float anisotropic = 
-                materials[i].HasProperty("anisotropicFactor") ? materials[i].GetFloat("anisotropicFactor")
+                _materials[i].HasProperty("anisotropicFactor") ? _materials[i].GetFloat("anisotropicFactor")
                 : 0.0f;
             float specular = 
-                materials[i].HasProperty("specularFactor") ? materials[i].GetFloat("specularFactor")
+                _materials[i].HasProperty("specularFactor") ? _materials[i].GetFloat("specularFactor")
                 : 0.0f;
             float specularTint = 
-                materials[i].HasProperty("specularTint") ? materials[i].GetFloat("specularTint")
+                _materials[i].HasProperty("specularTint") ? _materials[i].GetFloat("specularTint")
                 : 0.0f;
             float sheen = 
-                materials[i].HasProperty("sheenFactor") ? materials[i].GetFloat("sheenFactor")
+                _materials[i].HasProperty("sheenFactor") ? _materials[i].GetFloat("sheenFactor")
                 : 0.0f;
             float sheenTint =
-                materials[i].HasProperty("sheenTint") ? materials[i].GetFloat("sheenTint")
+                _materials[i].HasProperty("sheenTint") ? _materials[i].GetFloat("sheenTint")
                 : 0.0f;
             float subsurface =
-                materials[i].HasProperty("subsurfaceFactor") ? materials[i].GetFloat("subsurfaceFactor")
+                _materials[i].HasProperty("subsurfaceFactor") ? _materials[i].GetFloat("subsurfaceFactor")
                 : 0.0f;
             float clearCoat =
-                materials[i].HasProperty("clearCoatFactor") ? materials[i].GetFloat("clearCoatFactor")
+                _materials[i].HasProperty("clearCoatFactor") ? _materials[i].GetFloat("clearCoatFactor")
                 : 0.0f;
             float clearCoatGloss =
-                materials[i].HasProperty("clearCoatGloss") ? materials[i].GetFloat("clearCoatGloss")
+                _materials[i].HasProperty("clearCoatGloss") ? _materials[i].GetFloat("clearCoatGloss")
                 : 0.0f;
 
-            int mdi = i * MaterialSize;
-            int mti = mdi + TextureOffset;
+            int mdi = i * kMaterialSize;
+            int mti = mdi + kTextureOffset;
 
             materialData[mdi + 0] = Mathf.Pow(baseColor.r, 2.2f); // data1
             materialData[mdi + 1] = Mathf.Pow(baseColor.g, 2.2f);
@@ -233,8 +213,8 @@ public class BVHScene
             materialData[mti + 3] = -1.0f; // emission texture
 
             // BaseColor texture
-            Texture mainTex = materials[i].HasProperty("_MainTex") ? materials[i].GetTexture("_MainTex")
-                : materials[i].HasProperty("baseColorTexture") ? materials[i].GetTexture("baseColorTexture")
+            Texture mainTex = _materials[i].HasProperty("_MainTex") ? _materials[i].GetTexture("_MainTex")
+                : _materials[i].HasProperty("baseColorTexture") ? _materials[i].GetTexture("baseColorTexture")
                 : null;
             if (mainTex)
             {
@@ -250,8 +230,8 @@ public class BVHScene
             }
 
             // MetallicRoughness texture
-            Texture metallicRoughnessTex = materials[i].HasProperty("_MetallicRoughnessMap") ? materials[i].GetTexture("_MetallicRoughnessMap")
-                : materials[i].HasProperty("metallicRoughnessTexture") ? materials[i].GetTexture("metallicRoughnessTexture")
+            Texture metallicRoughnessTex = _materials[i].HasProperty("_MetallicRoughnessMap") ? _materials[i].GetTexture("_MetallicRoughnessMap")
+                : _materials[i].HasProperty("metallicRoughnessTexture") ? _materials[i].GetTexture("metallicRoughnessTexture")
                 : null;
             if (metallicRoughnessTex)
             {
@@ -267,8 +247,8 @@ public class BVHScene
             }
 
             // Normal texture
-            Texture normalTex = materials[i].HasProperty("_BumpMap") ? materials[i].GetTexture("_BumpMap")
-                : materials[i].HasProperty("normalTexture") ? materials[i].GetTexture("normalTexture")
+            Texture normalTex = _materials[i].HasProperty("_BumpMap") ? _materials[i].GetTexture("_BumpMap")
+                : _materials[i].HasProperty("normalTexture") ? _materials[i].GetTexture("normalTexture")
                 : null;
             if (normalTex)
             {
@@ -284,8 +264,8 @@ public class BVHScene
             }
 
             // Emission texture
-            Texture emissionTex = materials[i].HasProperty("_EmissionMap") ? materials[i].GetTexture("_EmissionMap")
-                : materials[i].HasProperty("emissiveTexture") ? materials[i].GetTexture("emissiveTexture")
+            Texture emissionTex = _materials[i].HasProperty("_EmissionMap") ? _materials[i].GetTexture("_EmissionMap")
+                : _materials[i].HasProperty("emissiveTexture") ? _materials[i].GetTexture("emissiveTexture")
                 : null;
             if (emissionTex)
             {
@@ -300,11 +280,11 @@ public class BVHScene
                 }
             }
         }
-        materialsBuffer.SetData(materialData);
+        _materialsBuffer.SetData(materialData);
 
         if (updateTextures)
         {
-            Debug.Log("Total Textures: " + textures.Count);
+            Debug.Log($"Total Textures: {textures.Count}");
 
             int totalTextureSize = 0;
             foreach (Texture texture in textures)
@@ -317,11 +297,11 @@ public class BVHScene
 
             if (totalTextureSize > 0)
             {
-                textureDataBuffer = new ComputeBuffer(totalTextureSize, 4);
+                _textureDataBuffer = new ComputeBuffer(totalTextureSize, 4);
 
-                textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
+                _textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
 
-                textureCopyShader.SetBuffer(0, "TextureData", textureDataBuffer);
+                _textureCopyShader.SetBuffer(0, "TextureData", _textureDataBuffer);
 
                 uint[] textureDescriptorData = new uint[textures.Count * 4];
                 int ti = 0;
@@ -334,7 +314,7 @@ public class BVHScene
                     int totalPixels = width * height;
                     bool hasAlpha = GraphicsFormatUtility.HasAlphaChannel(texture.graphicsFormat);
 
-                    Debug.Log("Texture: " + texture.name + " " + textureIndex + " " + width + "x" + height + " offset:" + textureDataOffset + " " + (totalPixels * 4) + " bytes");
+                    Debug.Log($"Texture {textureIndex}: {texture.name} {width}x{height} offset:{textureDataOffset} {(totalPixels * 4):n0} bytes");
                     textureIndex++;
 
                     textureDescriptorData[ti++] = (uint)width;
@@ -342,41 +322,245 @@ public class BVHScene
                     textureDescriptorData[ti++] = (uint)textureDataOffset;
                     textureDescriptorData[ti++] = (uint)0;
 
-                    textureCopyShader.SetTexture(0, "Texture", texture);
-                    textureCopyShader.SetInt("TextureWidth", width);
-                    textureCopyShader.SetInt("TextureHeight", height);
-                    textureCopyShader.SetInt("TextureDataOffset", textureDataOffset);
-                    textureCopyShader.SetInt("TextureHasAlpha", hasAlpha ? 1 : 0);
+                    _textureCopyShader.SetTexture(0, "Texture", texture);
+                    _textureCopyShader.SetInt("TextureWidth", width);
+                    _textureCopyShader.SetInt("TextureHeight", height);
+                    _textureCopyShader.SetInt("TextureDataOffset", textureDataOffset);
+                    _textureCopyShader.SetInt("TextureHasAlpha", hasAlpha ? 1 : 0);
 
                     int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
-                    textureCopyShader.Dispatch(0, dispatchX, 1, 1);
+                    _textureCopyShader.Dispatch(0, dispatchX, 1, 1);
 
                     textureDataOffset += totalPixels;
                 }
                 
-                textureDescriptorBuffer.SetData(textureDescriptorData);
+                _textureDescriptorBuffer.SetData(textureDescriptorData);
 
-                Debug.Log("Total texture data size: " + totalTextureSize * 16 + " bytes");
+                Debug.Log($"Total texture data size: {(totalTextureSize * 16):n0} bytes");
             }
             else
             {
-                textureDataBuffer?.Release();
-                textureDescriptorBuffer?.Release();
-                textureDataBuffer = null;
-                textureDescriptorBuffer = null;
+                _textureDataBuffer?.Release();
+                _textureDescriptorBuffer?.Release();
+                _textureDataBuffer = null;
+                _textureDescriptorBuffer = null;
             }
         }
     }
 
-    public void ProcessMeshes()
+    List<Mesh> _meshes = new();
+    List<int> _meshStartIndices = new();
+    List<int> _meshTriangleCount = new();
+    int _totalVertexCount2 = 0;
+    int _totalTriangleCount2 = 0;
+    DateTime _readbackStartTime2;
+    ComputeBuffer _vertexPositionBufferGPU2;
+    NativeArray<Vector4> _vertexPositionBufferCPU2;
+    ComputeBuffer _triangleAttributesBuffer2;
+    ComputeBuffer _materialsBuffer2;
+    ComputeBuffer _bvhNodesBuffer2;
+    ComputeBuffer _bvhTrianglesBuffer2;
+
+    public void ProcessMeshes2()
     {
-        totalVertexCount = 0;
-        totalTriangleCount = 0;
+        _totalVertexCount2 = 0;
+        _totalTriangleCount2 = 0;
 
         // Populate list of mesh renderers to trace against
-        meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+        var meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
 
-        List<Mesh> meshes = new();
+        _meshes.Clear();
+        _meshStartIndices.Clear();
+        _meshTriangleCount.Clear();
+
+        // Gather info on the meshes we'll be using
+        foreach (MeshRenderer renderer in meshRenderers)
+        {
+            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+            if (mesh == null || _meshes.Contains(mesh))
+                continue;
+
+            int triangleCount = Utilities.GetTriangleCount(mesh);
+
+            _meshes.Add(mesh);
+            _meshStartIndices.Add(_totalTriangleCount2);
+            _meshTriangleCount.Add(triangleCount);
+
+            _totalVertexCount2 += triangleCount * 3;
+            _totalTriangleCount2 += triangleCount;    
+        }
+
+        if (_totalVertexCount2 == 0)
+        {
+            Debug.LogError("No meshes found to process.");
+            return;
+        }
+
+        // Allocate buffers
+        _vertexPositionBufferGPU2 = new ComputeBuffer(_totalVertexCount2, kVertexPositionSize);
+        _vertexPositionBufferCPU2 = new NativeArray<Vector4>(_totalVertexCount2 * kVertexPositionSize, Allocator.Persistent);
+        _triangleAttributesBuffer2 = new ComputeBuffer(_totalVertexCount2 / 3, kTriangleAttributeSize);
+
+        //_materials.Clear();
+
+        int meshIndex = 0;
+
+        // Gather the data for each mesh to pass to tinybvh. This is done in a compute shader with async readback
+        // to avoid each mesh having to have read/write access.
+        foreach (Mesh mesh in _meshes)
+        {
+            Debug.Log($"Processing Mesh {meshIndex}/{_meshes.Count}");
+
+            GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
+            GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
+            
+            int triangleCount = Utilities.GetTriangleCount(mesh);
+
+            // Determine where in the Unity vertex buffer each vertex attribute is
+            int vertexStride, positionOffset, normalOffset, uvOffset, tangentOffset;
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out positionOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out normalOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out tangentOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out uvOffset, out vertexStride);
+            // Material will be stored in the TLAS instance info
+            int materialIndex = -1;
+
+            _meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
+            if (indexBuffer != null)
+                _meshProcessingShader.SetBuffer(0, "IndexBuffer", indexBuffer);
+            _meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", _vertexPositionBufferGPU2);
+            _meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", _triangleAttributesBuffer2);
+            _meshProcessingShader.SetInt("VertexStride", vertexStride);
+            _meshProcessingShader.SetInt("PositionOffset", positionOffset);
+            _meshProcessingShader.SetInt("NormalOffset", normalOffset);
+            _meshProcessingShader.SetInt("TangentOffset", tangentOffset);
+            _meshProcessingShader.SetInt("UVOffset", uvOffset);
+            _meshProcessingShader.SetInt("TriangleCount", triangleCount);
+            _meshProcessingShader.SetInt("OutputTriangleStart", _totalTriangleCount2);
+            _meshProcessingShader.SetInt("MaterialIndex", materialIndex);
+            _meshProcessingShader.SetMatrix("LocalToWorld", Matrix4x4.identity);
+
+            // Set keywords based on format/attributes of this mesh
+            _meshProcessingShader.SetKeyword(_has32BitIndicesKeyword, mesh.indexFormat == IndexFormat.UInt32);
+            _meshProcessingShader.SetKeyword(_hasNormalsKeyword, mesh.HasVertexAttribute(VertexAttribute.Normal));
+            _meshProcessingShader.SetKeyword(_hasUVsKeyword, mesh.HasVertexAttribute(VertexAttribute.TexCoord0));
+            _meshProcessingShader.SetKeyword(_hasTangentsKeyword, mesh.HasVertexAttribute(VertexAttribute.Tangent));
+            _meshProcessingShader.SetKeyword(_hasIndexBufferKeyword, indexBuffer != null);
+
+            _meshProcessingShader.Dispatch(0, Mathf.CeilToInt(triangleCount / 64.0f), 1, 1);
+
+            _totalTriangleCount2 += triangleCount;
+
+            vertexBuffer?.Release();
+            indexBuffer?.Release();
+        }
+
+        Debug.Log($"Meshes processed. Total triangles: {_totalTriangleCount2:n0}");
+
+        //List<Texture> textures = new();
+
+        //_materialsBuffer = new ComputeBuffer(_materials.Count, kMaterialSize * 4);
+        //Debug.Log("Total _materials: " + _materials.Count);
+        //UpdateMaterialData(true);
+
+        // Initiate async readback of vertex buffer to pass to tinybvh to build
+        _readbackStartTime2 = DateTime.UtcNow;
+        AsyncGPUReadback.RequestIntoNativeArray(ref _vertexPositionBufferCPU2, _vertexPositionBufferGPU2, OnCompleteReadback2);
+    }
+
+    unsafe void OnCompleteReadback2(AsyncGPUReadbackRequest request)
+    {
+        if (request.hasError)
+        {
+            Debug.LogError("GPU Readback Error.");
+            return;
+        }
+
+        TimeSpan readbackTime = DateTime.UtcNow - _readbackStartTime2;
+        Debug.Log($"GPU Readback Took: {readbackTime.TotalMilliseconds:n0}ms");
+
+        // In the editor if we exit play mode before the bvh is finished building the memory will be freed
+        // and tinybvh will illegal access and crash everything. 
+        #if UNITY_EDITOR
+            NativeArray<Vector4> persistentBuffer = new NativeArray<Vector4>(_vertexPositionBufferCPU2.Length, Allocator.Persistent);
+            persistentBuffer.CopyFrom(_vertexPositionBufferCPU2);
+            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(persistentBuffer);
+        #else
+            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(_vertexPositionBufferCPU2);
+        #endif
+        
+        DateTime bvhStartTime = DateTime.UtcNow;
+
+        List<tinybvh.BVH> bvhList = new();
+
+        int totalNodeSize = 0;
+        int totalTriSize = 0;
+
+        for (int i = 0; i < _meshStartIndices.Count; i++)
+        {
+            tinybvh.BVH bvh = new tinybvh.BVH();
+            bvhList.Add(bvh);
+
+            int meshStartIndex = _meshStartIndices[i];
+            int meshTriangleCount = _meshTriangleCount[i];
+
+            IntPtr meshPtr = IntPtr.Add(dataPointer, meshStartIndex * 4 * 4 * 3);
+
+            bvh.Build(meshPtr, meshTriangleCount);
+            // Get the sizes of the arrays
+            int nodesSize = bvh.GetCWBVHNodesSize();
+            int trisSize = bvh.GetCWBVHTrisSize();
+
+            totalNodeSize += nodesSize;
+            totalTriSize += trisSize;
+            Debug.Log($"!!!! BVH Data Size: nodes:{nodesSize:n0} triangles:{trisSize:n0}");
+        }
+
+        Debug.Log($"!!!! Total BVH Data Size: nodes:{totalNodeSize:n0} triangles:{totalTriSize:n0}");
+        _bvhNodesBuffer2 = new ComputeBuffer(totalNodeSize / 4, 4);
+        _bvhTrianglesBuffer2 = new ComputeBuffer(totalTriSize / 4, 4);
+
+        int nodeOffset = 0;
+        int triOffset = 0;
+        for (int i = 0; i < bvhList.Count; ++i)
+        {
+            tinybvh.BVH bvh = bvhList[i];
+
+            int nodesSize = bvh.GetCWBVHNodesSize();
+            int trisSize = bvh.GetCWBVHTrisSize();
+
+            IntPtr nodesPtr, trisPtr;
+            if (bvh.GetCWBVHData(out nodesPtr, out trisPtr))
+            {
+                //Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, kBVHNodeSize, totalNodeSize, nodeOffset);
+                //Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, kBVHTriSize, totalTriSize, triOffset);
+            }
+
+            nodeOffset += nodesSize;
+            triOffset += trisSize;
+        }
+
+        foreach (tinybvh.BVH bvh in bvhList)
+        {
+            bvh.Destroy();
+        }
+
+        TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
+
+        Debug.Log($"Building BVH took: {bvhTime.TotalMilliseconds:n0}ms");
+
+        #if UNITY_EDITOR
+            persistentBuffer.Dispose();
+        #endif
+    }
+
+    public void ProcessMeshes()
+    {
+        _totalVertexCount = 0;
+        _totalTriangleCount = 0;
+
+        // Populate list of mesh renderers to trace against
+        var meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
 
         // Gather info on the meshes we'll be using
         foreach (MeshRenderer renderer in meshRenderers)
@@ -385,27 +569,21 @@ public class BVHScene
             if (mesh == null)
                 continue;
 
-            totalVertexCount += Utilities.GetTriangleCount(mesh) * 3;
-
-            if (!meshes.Contains(mesh))
-                meshes.Add(mesh);
+            _totalVertexCount += Utilities.GetTriangleCount(mesh) * 3;
         }
 
-        if (totalVertexCount == 0)
+        if (_totalVertexCount == 0)
         {
             Debug.LogError("No meshes found to process.");
             return;
         }
 
         // Allocate buffers
-        vertexPositionBufferGPU = new ComputeBuffer(totalVertexCount, VertexPositionSize);
-        vertexPositionBufferCPU = new NativeArray<Vector4>(totalVertexCount * VertexPositionSize, Allocator.Persistent);
-        triangleAttributesBuffer = new ComputeBuffer(totalVertexCount / 3, TriangleAttributeSize);
+        _vertexPositionBufferGPU = new ComputeBuffer(_totalVertexCount, kVertexPositionSize);
+        _vertexPositionBufferCPU = new NativeArray<Vector4>(_totalVertexCount * kVertexPositionSize, Allocator.Persistent);
+        _triangleAttributesBuffer = new ComputeBuffer(_totalVertexCount / 3, kTriangleAttributeSize);
 
-        materials.Clear();
-
-        List<int> meshStartIndices = new();
-        List<int> meshTriangleCount = new();
+        _materials.Clear();
 
         // Gather the data for each mesh to pass to tinybvh. This is done in a compute shader with async readback
         // to avoid each mesh having to have read/write access.
@@ -416,12 +594,12 @@ public class BVHScene
                 continue;
 
             Material material = renderer.material;
-            if (!materials.Contains(material))
-                materials.Add(material);
+            if (!_materials.Contains(material))
+                _materials.Add(material);
 
-            int materialIndex = materials.IndexOf(material);
+            int materialIndex = _materials.IndexOf(material);
 
-            Debug.Log("Processing mesh: " + renderer.gameObject.name);
+            Debug.Log($"Processing mesh: {renderer.gameObject.name}");
 
             GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
             GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
@@ -435,52 +613,49 @@ public class BVHScene
             Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out tangentOffset, out vertexStride);
             Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out uvOffset, out vertexStride);
 
-            meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
+            _meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
             if (indexBuffer != null)
-                meshProcessingShader.SetBuffer(0, "IndexBuffer", indexBuffer);
-            meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", vertexPositionBufferGPU);
-            meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", triangleAttributesBuffer);
-            meshProcessingShader.SetInt("VertexStride", vertexStride);
-            meshProcessingShader.SetInt("PositionOffset", positionOffset);
-            meshProcessingShader.SetInt("NormalOffset", normalOffset);
-            meshProcessingShader.SetInt("TangentOffset", tangentOffset);
-            meshProcessingShader.SetInt("UVOffset", uvOffset);
-            meshProcessingShader.SetInt("TriangleCount", triangleCount);
-            meshProcessingShader.SetInt("OutputTriangleStart", totalTriangleCount);
-            meshProcessingShader.SetInt("MaterialIndex", materialIndex);
-            meshProcessingShader.SetMatrix("LocalToWorld", renderer.localToWorldMatrix);
+                _meshProcessingShader.SetBuffer(0, "IndexBuffer", indexBuffer);
+            _meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", _vertexPositionBufferGPU);
+            _meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", _triangleAttributesBuffer);
+            _meshProcessingShader.SetInt("VertexStride", vertexStride);
+            _meshProcessingShader.SetInt("PositionOffset", positionOffset);
+            _meshProcessingShader.SetInt("NormalOffset", normalOffset);
+            _meshProcessingShader.SetInt("TangentOffset", tangentOffset);
+            _meshProcessingShader.SetInt("UVOffset", uvOffset);
+            _meshProcessingShader.SetInt("TriangleCount", triangleCount);
+            _meshProcessingShader.SetInt("OutputTriangleStart", _totalTriangleCount);
+            _meshProcessingShader.SetInt("MaterialIndex", materialIndex);
+            _meshProcessingShader.SetMatrix("LocalToWorld", renderer.localToWorldMatrix);
 
             // Set keywords based on format/attributes of this mesh
-            meshProcessingShader.SetKeyword(has32BitIndicesKeyword, mesh.indexFormat == IndexFormat.UInt32);
-            meshProcessingShader.SetKeyword(hasNormalsKeyword, mesh.HasVertexAttribute(VertexAttribute.Normal));
-            meshProcessingShader.SetKeyword(hasUVsKeyword, mesh.HasVertexAttribute(VertexAttribute.TexCoord0));
-            meshProcessingShader.SetKeyword(hasTangentsKeyword, mesh.HasVertexAttribute(VertexAttribute.Tangent));
-            meshProcessingShader.SetKeyword(hasIndexBufferKeyword, indexBuffer != null);
+            _meshProcessingShader.SetKeyword(_has32BitIndicesKeyword, mesh.indexFormat == IndexFormat.UInt32);
+            _meshProcessingShader.SetKeyword(_hasNormalsKeyword, mesh.HasVertexAttribute(VertexAttribute.Normal));
+            _meshProcessingShader.SetKeyword(_hasUVsKeyword, mesh.HasVertexAttribute(VertexAttribute.TexCoord0));
+            _meshProcessingShader.SetKeyword(_hasTangentsKeyword, mesh.HasVertexAttribute(VertexAttribute.Tangent));
+            _meshProcessingShader.SetKeyword(_hasIndexBufferKeyword, indexBuffer != null);
 
-            meshProcessingShader.Dispatch(0, Mathf.CeilToInt(triangleCount / 64.0f), 1, 1);
+            _meshProcessingShader.Dispatch(0, Mathf.CeilToInt(triangleCount / 64.0f), 1, 1);
 
-            meshStartIndices.Add(totalTriangleCount);
-            meshTriangleCount.Add(triangleCount);
-
-            totalTriangleCount += triangleCount;
+            _totalTriangleCount += triangleCount;
 
             vertexBuffer?.Release();
             indexBuffer?.Release();
         }
 
-        Debug.Log("Meshes processed. Total triangles: " + totalTriangleCount);
+        Debug.Log($"Meshes processed. Total triangles: {_totalTriangleCount:n0}");
 
         List<Texture> textures = new();
 
-        materialsBuffer = new ComputeBuffer(materials.Count, MaterialSize * 4);
+        _materialsBuffer = new ComputeBuffer(_materials.Count, kMaterialSize * 4);
 
-        Debug.Log("Total materials: " + materials.Count);
+        Debug.Log($"Total _materials: {_materials.Count}");
 
         UpdateMaterialData(true);
 
         // Initiate async readback of vertex buffer to pass to tinybvh to build
-        readbackStartTime = DateTime.UtcNow;
-        AsyncGPUReadback.RequestIntoNativeArray(ref vertexPositionBufferCPU, vertexPositionBufferGPU, OnCompleteReadback);
+        _readbackStartTime = DateTime.UtcNow;
+        AsyncGPUReadback.RequestIntoNativeArray(ref _vertexPositionBufferCPU, _vertexPositionBufferGPU, OnCompleteReadback);
     }
 
     unsafe void OnCompleteReadback(AsyncGPUReadbackRequest request)
@@ -491,29 +666,47 @@ public class BVHScene
             return;
         }
 
-        TimeSpan readbackTime = DateTime.UtcNow - readbackStartTime;
-        Debug.Log("GPU readback took: " + readbackTime.TotalMilliseconds + "ms");
+        TimeSpan readbackTime = DateTime.UtcNow - _readbackStartTime;
+        Debug.Log($"GPU readback took: {readbackTime.TotalMilliseconds:n0}ms");
 
         // In the editor if we exit play mode before the bvh is finished building the memory will be freed
         // and tinybvh will illegal access and crash everything. 
         #if UNITY_EDITOR
-            NativeArray<Vector4> persistentBuffer = new NativeArray<Vector4>(vertexPositionBufferCPU.Length, Allocator.Persistent);
-            persistentBuffer.CopyFrom(vertexPositionBufferCPU);
+            NativeArray<Vector4> persistentBuffer = new NativeArray<Vector4>(_vertexPositionBufferCPU.Length, Allocator.Persistent);
+            persistentBuffer.CopyFrom(_vertexPositionBufferCPU);
             IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(persistentBuffer);
         #else
-            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(vertexPositionBufferCPU);
+            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(_vertexPositionBufferCPU);
         #endif
+
+        tinybvh.BVH bvh = new tinybvh.BVH();
         
         DateTime bvhStartTime = DateTime.UtcNow;
-        sceneBVH.Build(dataPointer, totalTriangleCount);
+        bvh.Build(dataPointer, _totalTriangleCount);
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 
-        Debug.Log("Building BVH took: " + bvhTime.TotalMilliseconds + "ms");
+        Debug.Log($"Building BVH took: {bvhTime.TotalMilliseconds:n0}ms");
 
         #if UNITY_EDITOR
             persistentBuffer.Dispose();
         #endif
 
-        buildingBVH = true;
+        // Get the sizes of the arrays
+        int nodesSize = bvh.GetCWBVHNodesSize();
+        int trisSize = bvh.GetCWBVHTrisSize();
+
+        IntPtr nodesPtr, trisPtr;
+        if (bvh.GetCWBVHData(out nodesPtr, out trisPtr))
+        {
+            Utilities.UploadFromPointer(ref _bvhNodesBuffer, nodesPtr, nodesSize, kBVHNodeSize);
+            Utilities.UploadFromPointer(ref _bvhTrianglesBuffer, trisPtr, trisSize, kBVHTriSize);
+            Debug.Log("BVH Uploaded");
+        } 
+        else
+        {
+            Debug.LogError("Failed to fetch updated BVH data.");
+        }
+
+        bvh.Destroy();
     }
 }

@@ -17,7 +17,8 @@ float RandomFloat(inout uint state)
     return (float)state / (float)0xffffffffu;
 }
 
-float RandomRange(float min, float max, inout uint state) {
+float RandomRange(float min, float max, inout uint state)
+{
     return min + RandomFloat(state) * (max - min);
 }
 

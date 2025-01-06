@@ -128,4 +128,26 @@ internal static class Utilities
             AtomicSafetyHandle.Release(atomicSafetyHandle);
         #endif
     }
+
+    public unsafe static void UploadFromPointer2(ref ComputeBuffer buffer, IntPtr dataPtr, int dataSize, int dataStride, int bufferSize, int bufferOffset)
+    {
+        NativeArray<float> nativeArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<float>(
+            dataPtr.ToPointer(),
+            dataSize / 4,
+            Allocator.None
+        );
+
+        #if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle atomicSafetyHandle = AtomicSafetyHandle.Create();
+            NativeArrayUnsafeUtility.SetAtomicSafetyHandle(ref nativeArray, atomicSafetyHandle);
+        #endif
+
+        PrepareBuffer(ref buffer, bufferSize / dataStride, dataStride);
+        buffer.SetData(nativeArray, 0, bufferOffset, dataSize / dataStride);
+
+        #if ENABLE_UNITY_COLLECTIONS_CHECKS
+            AtomicSafetyHandle.CheckDeallocateAndThrow(atomicSafetyHandle);
+            AtomicSafetyHandle.Release(atomicSafetyHandle);
+        #endif
+    }
 }

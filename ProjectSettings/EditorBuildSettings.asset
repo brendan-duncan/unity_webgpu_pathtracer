@@ -14,8 +14,11 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Examples/Scenes/CornellBox.unity
     guid: 6423b87da8f99ad448b16af10b7b75c0
-  - enabled: 1
+  - enabled: 0
     path: Assets/Examples/Scenes/Helmet.unity
     guid: 091f2aa6ba5ae3446b6a936b425ffae3
+  - enabled: 1
+    path: Assets/Examples/Scenes/TLAS.unity
+    guid: 1f6427c62058bf44e944fb7ea0b3336f
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0
