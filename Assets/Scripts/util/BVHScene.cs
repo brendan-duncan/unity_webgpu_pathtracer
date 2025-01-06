@@ -38,7 +38,7 @@ public class BVHScene
     ComputeBuffer bvhNodes;
     ComputeBuffer bvhTris;
 
-    List<Material> materials = new List<Material>();
+    List<Material> materials = new();
 
     // Struct sizes in bytes
     const int VertexPositionSize = 16;
@@ -133,7 +133,7 @@ public class BVHScene
 
     public void UpdateMaterialData(bool updateTextures)
     {
-        List<Texture> textures = new List<Texture>();
+        List<Texture> textures = new();
         float[] materialData = new float[materials.Count * MaterialSize];
         for (int i = 0; i < materials.Count; i++)
         {
@@ -376,16 +376,19 @@ public class BVHScene
         // Populate list of mesh renderers to trace against
         meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
 
+        List<Mesh> meshes = new();
+
         // Gather info on the meshes we'll be using
         foreach (MeshRenderer renderer in meshRenderers)
         {
             Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
             if (mesh == null)
-            {
                 continue;
-            }
 
             totalVertexCount += Utilities.GetTriangleCount(mesh) * 3;
+
+            if (!meshes.Contains(mesh))
+                meshes.Add(mesh);
         }
 
         if (totalVertexCount == 0)
@@ -401,15 +404,16 @@ public class BVHScene
 
         materials.Clear();
 
+        List<int> meshStartIndices = new();
+        List<int> meshTriangleCount = new();
+
         // Gather the data for each mesh to pass to tinybvh. This is done in a compute shader with async readback
         // to avoid each mesh having to have read/write access.
         foreach (MeshRenderer renderer in meshRenderers)
         {
             Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
             if (mesh == null)
-            {
                 continue;
-            }
 
             Material material = renderer.material;
             if (!materials.Contains(material))
@@ -433,9 +437,7 @@ public class BVHScene
 
             meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
             if (indexBuffer != null)
-            {
                 meshProcessingShader.SetBuffer(0, "IndexBuffer", indexBuffer);
-            }
             meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", vertexPositionBufferGPU);
             meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", triangleAttributesBuffer);
             meshProcessingShader.SetInt("VertexStride", vertexStride);
@@ -449,13 +451,16 @@ public class BVHScene
             meshProcessingShader.SetMatrix("LocalToWorld", renderer.localToWorldMatrix);
 
             // Set keywords based on format/attributes of this mesh
-            meshProcessingShader.SetKeyword(has32BitIndicesKeyword, (mesh.indexFormat == IndexFormat.UInt32));
+            meshProcessingShader.SetKeyword(has32BitIndicesKeyword, mesh.indexFormat == IndexFormat.UInt32);
             meshProcessingShader.SetKeyword(hasNormalsKeyword, mesh.HasVertexAttribute(VertexAttribute.Normal));
             meshProcessingShader.SetKeyword(hasUVsKeyword, mesh.HasVertexAttribute(VertexAttribute.TexCoord0));
             meshProcessingShader.SetKeyword(hasTangentsKeyword, mesh.HasVertexAttribute(VertexAttribute.Tangent));
             meshProcessingShader.SetKeyword(hasIndexBufferKeyword, indexBuffer != null);
 
             meshProcessingShader.Dispatch(0, Mathf.CeilToInt(triangleCount / 64.0f), 1, 1);
+
+            meshStartIndices.Add(totalTriangleCount);
+            meshTriangleCount.Add(triangleCount);
 
             totalTriangleCount += triangleCount;
 
@@ -465,7 +470,7 @@ public class BVHScene
 
         Debug.Log("Meshes processed. Total triangles: " + totalTriangleCount);
 
-        List<Texture> textures = new List<Texture>();
+        List<Texture> textures = new();
 
         materialsBuffer = new ComputeBuffer(materials.Count, MaterialSize * 4);
 
@@ -503,7 +508,7 @@ public class BVHScene
         sceneBVH.Build(dataPointer, totalTriangleCount);
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 
-        Debug.Log("BVH built in: " + bvhTime.TotalMilliseconds + "ms");
+        Debug.Log("Building BVH took: " + bvhTime.TotalMilliseconds + "ms");
 
         #if UNITY_EDITOR
             persistentBuffer.Dispose();

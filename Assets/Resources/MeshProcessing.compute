@@ -97,10 +97,11 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
     
     // Write vertex positions into buffer
     int writeTriIndex = OutputTriangleStart + triIndex;
-    VertexPositionBuffer[(writeTriIndex * 3) + 0] = float4(vert0.xyz, 0);
-    VertexPositionBuffer[(writeTriIndex * 3) + 1] = float4(vert1.xyz, 0);
-    VertexPositionBuffer[(writeTriIndex * 3) + 2] = float4(vert2.xyz, 0);
-    
+    int writeIndex = writeTriIndex * 3;
+    VertexPositionBuffer[writeIndex + 0] = float4(vert0.xyz, 0);
+    VertexPositionBuffer[writeIndex + 1] = float4(vert1.xyz, 0);
+    VertexPositionBuffer[writeIndex + 2] = float4(vert2.xyz, 0);
+
     TriangleAttributes attr = (TriangleAttributes)0;
 
     #if HAS_NORMALS
