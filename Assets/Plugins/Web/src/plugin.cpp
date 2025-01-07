@@ -1,51 +1,35 @@
 #include <deque>
-//#include <mutex>
-#include <vector>
 
 #include "plugin.h"
 
-struct BVHContainer
-{
-    tinybvh::BVH8_CWBVH* cwbvh = nullptr;
-};
+static std::deque<tinybvh::BVH8_CWBVH*> gBVHList;
+static std::deque<tinybvh::BVH4_GPU*> gTLASList;
 
-// Global container for BVHs and a mutex for thread safety
-std::deque<tinybvh::BVH8_CWBVH*> gBVHs;
-//std::mutex gBVHMutex;
-
-// Adds a bvh to the global list either reusing an empty slot or making a new one.
 int AddBVH(tinybvh::BVH8_CWBVH* newBVH)
 {
-    //std::lock_guard<std::mutex> lock(gBVHMutex);
-
-    // Look for a free entry to reuse
-    for (size_t i = 0; i < gBVHs.size(); ++i) 
+    for (size_t i = 0; i < gBVHList.size(); ++i) 
     {
-        if (gBVHs[i] == nullptr) 
+        if (gBVHList[i] == nullptr) 
         {
-            gBVHs[i] = newBVH;
+            gBVHList[i] = newBVH;
             return static_cast<int>(i);
         }
     }
 
-    // If no free entry is found, append a new one
-    gBVHs.push_back(newBVH);
-    return static_cast<int>(gBVHs.size() - 1);
+    gBVHList.push_back(newBVH);
+    return static_cast<int>(gBVHList.size() - 1);
 }
 
-// Fetch a pointer to a BVH by index, or nullptr if the index is invalid
 tinybvh::BVH8_CWBVH* GetBVH(int index)
 {
-    //std::lock_guard<std::mutex> lock(gBVHMutex);
-    if (index >= 0 && index < static_cast<int>(gBVHs.size())) 
-        return gBVHs[index];
+    if (index >= 0 && index < static_cast<int>(gBVHList.size())) 
+        return gBVHList[index];
     return nullptr;
 }
 
 extern "C" int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount)
 {
     tinybvh::BVH8_CWBVH* cwbvh = new tinybvh::BVH8_CWBVH();
-    //cwbvh->BuildHQ(vertices, triangleCount);
     cwbvh->Build(vertices, triangleCount);
     
     return AddBVH(cwbvh);
@@ -53,13 +37,12 @@ extern "C" int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount)
 
 extern "C" void DestroyBVH(int index) 
 {
-    //std::lock_guard<std::mutex> lock(gBVHMutex);
-    if (index >= 0 && index < static_cast<int>(gBVHs.size())) 
+    if (index >= 0 && index < static_cast<int>(gBVHList.size())) 
     {
-        if (gBVHs[index] != nullptr)
+        if (gBVHList[index] != nullptr)
         {
-            delete gBVHs[index];
-            gBVHs[index] = nullptr;
+            delete gBVHList[index];
+            gBVHList[index] = nullptr;
         }
     }
 }
@@ -92,6 +75,79 @@ extern "C" bool GetCWBVHData(int index, tinybvh::bvhvec4** bvhNodes, tinybvh::bv
     {
         *bvhNodes = bvh->bvh8Data;
         *bvhTris  = bvh->bvh8Tris;
+        return true;
+    }
+
+    return false;
+}
+
+
+int AddTLAS(tinybvh::BVH4_GPU* newBVH)
+{
+    for (size_t i = 0; i < gTLASList.size(); ++i) 
+    {
+        if (gTLASList[i] == nullptr) 
+        {
+            gTLASList[i] = newBVH;
+            return static_cast<int>(i);
+        }
+    }
+
+    gTLASList.push_back(newBVH);
+    return static_cast<int>(gTLASList.size() - 1);
+}
+
+tinybvh::BVH4_GPU* GetTLAS(int index)
+{
+    if (index >= 0 && index < static_cast<int>(gTLASList.size())) 
+        return gTLASList[index];
+    return nullptr;
+}
+
+extern "C" int BuildTLAS(tinybvh::bvhaabb* aabbs, int instanceCount)
+{
+    tinybvh::BVH bvh;
+    bvh.BuildTLAS(aabbs, instanceCount);
+
+    tinybvh::BVH4_GPU* bvhGPU = new tinybvh::BVH4_GPU();
+    bvhGPU->ConvertFrom(bvh);
+
+    return AddTLAS(bvhGPU);
+}
+
+extern "C" void DestroyTLAS(int index)
+{
+    if (index >= 0 && index < static_cast<int>(gTLASList.size())) 
+    {
+        if (gTLASList[index] != nullptr)
+        {
+            delete gTLASList[index];
+            gTLASList[index] = nullptr;
+        }
+    }
+}
+
+extern "C" bool IsTLASReady(int index)
+{
+    tinybvh::BVH4_GPU* bvh = GetTLAS(index);
+    return bvh != nullptr;
+}
+
+extern "C" int GetTLASNodesSize(int index)
+{
+    tinybvh::BVH4_GPU* bvh = GetTLAS(index);
+    return bvh != nullptr ? bvh->usedBlocks * 16 : 0;
+}
+
+extern "C" bool GetTLASData(int index, tinybvh::bvhvec4** bvhNodes) 
+{
+    tinybvh::BVH4_GPU* bvh = GetTLAS(index);
+    if (bvh == nullptr)
+        return false;
+
+    if (bvh->bvh4Data != nullptr)
+    {
+        *bvhNodes = bvh->bvh4Data;
         return true;
     }
 

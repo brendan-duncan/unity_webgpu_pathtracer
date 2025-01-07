@@ -492,6 +492,9 @@ public class BVHScene
         int totalNodeSize = 0;
         int totalTriSize = 0;
 
+        List<int> nodeOffsets = new();
+        List<int> triOffsets = new();
+
         for (int i = 0; i < _meshes.Count; i++)
         {
             tinybvh.BVH bvh = new tinybvh.BVH();
@@ -506,15 +509,22 @@ public class BVHScene
             IntPtr meshPtr = IntPtr.Add(dataPointer, dataPointerOffset);
             //IntPtr meshPtr = dataPointer;
 
-            /*bvh.Build(meshPtr, meshTriangleCount);
+            //Debug.Log($"Data Ptr: {dataPointer}");
+            //Debug.Log($"Mesh Ptr: {meshPtr}");
+
+            bvh.Build(meshPtr, meshTriangleCount);
+            //bvh.Build(dataPointer, meshTriangleCount);
             
             // Get the sizes of the arrays
             int nodesSize = bvh.GetCWBVHNodesSize();
             int trisSize = bvh.GetCWBVHTrisSize();
 
+            nodeOffsets.Add(totalNodeSize);
+            triOffsets.Add(totalTriSize);
+
             totalNodeSize += nodesSize;
             totalTriSize += trisSize;
-            Debug.Log($"!!!! BVH Data Size: nodes:{nodesSize:n0} triangles:{trisSize:n0}");*/
+            Debug.Log($"!!!! BVH Data Size: nodes:{nodesSize:n0} triangles:{trisSize:n0}");
         }
 
         Debug.Log($"!!!! Total BVH Data Size: nodes:{totalNodeSize:n0} triangles:{totalTriSize:n0}");
@@ -527,14 +537,14 @@ public class BVHScene
         {
             tinybvh.BVH bvh = bvhList[i];
 
-            int nodesSize = bvh.GetCWBVHNodesSize();
+            int nodesSize = nod;
             int trisSize = bvh.GetCWBVHTrisSize();
 
             IntPtr nodesPtr, trisPtr;
             if (bvh.GetCWBVHData(out nodesPtr, out trisPtr))
             {
-                //Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, kBVHNodeSize, totalNodeSize, nodeOffset);
-                //Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, kBVHTriSize, totalTriSize, triOffset);
+                Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, kBVHNodeSize, totalNodeSize, nodeOffset);
+                Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, kBVHTriSize, totalTriSize, triOffset);
             }
 
             nodeOffset += nodesSize;
@@ -542,9 +552,7 @@ public class BVHScene
         }*/
 
         foreach (tinybvh.BVH bvh in bvhList)
-        {
             bvh.Destroy();
-        }
 
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 

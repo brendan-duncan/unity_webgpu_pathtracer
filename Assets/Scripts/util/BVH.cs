@@ -41,7 +41,6 @@ namespace tinybvh
         {
             if (index >= 0)
                 Destroy();
-
             index = BuildBVH(verticesPtr, count);
         }
 
