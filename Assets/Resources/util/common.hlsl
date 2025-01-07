@@ -45,6 +45,26 @@ struct LightSampleRec
     float pdf;
 };
 
+uint ExtractByte(uint value, uint byteIndex)
+{
+    return (value >> (byteIndex * 8)) & 0xFF;
+}
+
+// Extracts each byte from the float into the channel of a float4
+float4 ExtractBytes(float value)
+{
+    uint packed = asuint(value);
+
+    float4 channels = float4(
+        ExtractByte(packed, 0),
+        ExtractByte(packed, 1),
+        ExtractByte(packed, 2),
+        ExtractByte(packed, 3)
+    );
+
+    return channels;
+}
+
 float Select(float f, float t, bool c)
 {
     if (c)
@@ -59,6 +79,24 @@ float3 Select(float3 f, float3 t, bool c)
         return t;
     else
         return f;
+}
+
+float4 Select(float4 f, float4 t, bool c)
+{
+    if (c)
+        return t;
+    else
+        return f;
+}
+
+bool isless(float4 a, float4 b)
+{
+    return all(a < b);
+}
+
+bool isgreater(float4 a, float4 b)
+{
+    return all(a > b);
 }
 
 // Heaviside step function

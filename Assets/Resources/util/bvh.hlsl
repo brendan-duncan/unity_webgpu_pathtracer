@@ -12,6 +12,18 @@ int TriangleCount;
 StructuredBuffer<float4> BVHTris;
 StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
+// Nodes in CWBVH format.
+struct BVHNode
+{
+    float4 n0;
+    float4 n1;
+    float4 n2;
+    float4 n3;
+    float4 n4;
+};
+
+StructuredBuffer<BVHNode> BVHNodes;
+
 float3 GetGeometricNormal(RayHit hit)
 {
     float3 v0 = BVHTris[hit.triAddr + 2].xyz;
@@ -86,41 +98,8 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
     }
 }
 
-// Nodes in CWBVH format.
-struct BVHNode
-{
-    float4 n0;
-    float4 n1;
-    float4 n2;
-    float4 n3;
-    float4 n4;
-};
-
-StructuredBuffer<BVHNode> BVHNodes;
-
-
 // Stack size for BVH traversal
-#define BHV_STACK_SIZE 32
-
-uint ExtractByte(uint value, uint byteIndex)
-{
-    return (value >> (byteIndex * 8)) & 0xFF;
-}
-
-// Extracts each byte from the float into the channel of a float4
-float4 ExtractBytes(float value)
-{
-    uint packed = asuint(value);
-
-    float4 channels = float4(
-        ExtractByte(packed, 0),
-        ExtractByte(packed, 1),
-        ExtractByte(packed, 2),
-        ExtractByte(packed, 3)
-    );
-
-    return channels;
-}
+#define BVH_STACK_SIZE 32
 
 float3 GetNodeInvDir(float n0w, float3 invDir)
 {
@@ -195,7 +174,7 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
     float3 invDir = rcp(ray.direction.xyz);
     uint octinv4 = (7 - ((ray.direction.x < 0 ? 4 : 0) | (ray.direction.y < 0 ? 2 : 0) | (ray.direction.z < 0 ? 1 : 0))) * 0x1010101;
     
-    uint2 stack[BHV_STACK_SIZE];
+    uint2 stack[BVH_STACK_SIZE];
     uint stackPtr = 0;
     // 0x80000000 gets mis-compiled because FXC changes it to -0.0f, and Tint throws away the sign bit.
     // Use 0x80000001 instead.
@@ -218,10 +197,7 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
 
             nodeGroup.y &= ~(1 << childBitIndex);
             if (nodeGroup.y > 0x00FFFFFF) 
-            { 
-                // Push onto stack
                 stack[stackPtr++] = nodeGroup;
-            }
 
             uint slotIndex = (childBitIndex - 24) ^ (octinv4 & 255);
             uint relativeIndex = countbits(mask & ~(0xFFFFFFFF << slotIndex));

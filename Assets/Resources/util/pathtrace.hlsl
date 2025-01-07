@@ -8,6 +8,7 @@
 #include "material.hlsl"
 #include "ray.hlsl"
 #include "sky.hlsl"
+#include "tlas.hlsl"
 
 float3 PathTrace(Ray ray, inout uint rngState)
 {
