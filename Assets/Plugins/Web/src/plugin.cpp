@@ -139,7 +139,7 @@ extern "C" int GetTLASNodesSize(int index)
     return bvh != nullptr ? bvh->usedBlocks * 16 : 0;
 }
 
-extern "C" bool GetTLASData(int index, tinybvh::bvhvec4** bvhNodes) 
+extern "C" bool GetTLASData(int index, tinybvh::bvhvec4** bvhNodes)
 {
     tinybvh::BVH4_GPU* bvh = GetTLAS(index);
     if (bvh == nullptr)

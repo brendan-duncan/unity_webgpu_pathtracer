@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
@@ -407,7 +406,7 @@ public class BVHScene
 
         int meshIndex = 0;
 
-        // Gather the data for each mesh to pass to tinybvh. This is done in a compute shader with async readback
+        // Gather the data for each mesh to pass to TinyBVH. This is done in a compute shader with async readback
         // to avoid each mesh having to have read/write access.
         foreach (Mesh mesh in _meshes)
         {
@@ -459,7 +458,7 @@ public class BVHScene
 
         Debug.Log($"Meshes processed.");
 
-        // Initiate async readback of vertex buffer to pass to tinybvh to build
+        // Initiate async readback of vertex buffer to pass to TinyBVH to build
         _readbackStartTime2 = DateTime.UtcNow;
         AsyncGPUReadback.RequestIntoNativeArray(ref _vertexPositionBufferCPU2, _vertexPositionBufferGPU2, OnCompleteReadback2);
     }
@@ -476,7 +475,7 @@ public class BVHScene
         Debug.Log($"Mesh GPU Readback Took: {readbackTime.TotalMilliseconds:n0}ms");
 
         // In the editor if we exit play mode before the bvh is finished building the memory will be freed
-        // and tinybvh will illegal access and crash everything. 
+        // and TinyBVH will illegal access and crash everything. 
         #if UNITY_EDITOR
             NativeArray<Vector4> persistentBuffer = new NativeArray<Vector4>(_vertexPositionBufferCPU2.Length, Allocator.Persistent);
             persistentBuffer.CopyFrom(_vertexPositionBufferCPU2);
@@ -487,19 +486,16 @@ public class BVHScene
         
         DateTime bvhStartTime = DateTime.UtcNow;
 
-        List<tinybvh.BVH> bvhList = new();
-
         int totalNodeSize = 0;
         int totalTriSize = 0;
 
         List<int> nodeOffsets = new();
         List<int> triOffsets = new();
 
+        List<int> bvhList = new();
+
         for (int i = 0; i < _meshes.Count; i++)
         {
-            tinybvh.BVH bvh = new tinybvh.BVH();
-            bvhList.Add(bvh);
-
             int meshStartIndex = _meshStartIndices[i];
             int meshTriangleCount = _meshTriangleCount[i];
             int dataPointerOffset = meshStartIndex * 4 * 4 * 3;
@@ -512,19 +508,20 @@ public class BVHScene
             //Debug.Log($"Data Ptr: {dataPointer}");
             //Debug.Log($"Mesh Ptr: {meshPtr}");
 
-            bvh.Build(meshPtr, meshTriangleCount);
-            //bvh.Build(dataPointer, meshTriangleCount);
+            /*int bvhIndex = TinyBVH.BuildBVH(meshPtr, meshTriangleCount);
+            //int bvhIndex = TinyBVH.BuildBVH(dataPointer, meshTriangleCount);
+            bvhList.Add(bvhIndex);
             
             // Get the sizes of the arrays
-            int nodesSize = bvh.GetCWBVHNodesSize();
-            int trisSize = bvh.GetCWBVHTrisSize();
+            int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
+            int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
 
             nodeOffsets.Add(totalNodeSize);
             triOffsets.Add(totalTriSize);
 
             totalNodeSize += nodesSize;
             totalTriSize += trisSize;
-            Debug.Log($"!!!! BVH Data Size: nodes:{nodesSize:n0} triangles:{trisSize:n0}");
+            Debug.Log($"!!!! BVH Data Size: nodes:{nodesSize:n0} triangles:{trisSize:n0}");*/
         }
 
         Debug.Log($"!!!! Total BVH Data Size: nodes:{totalNodeSize:n0} triangles:{totalTriSize:n0}");
@@ -535,13 +532,12 @@ public class BVHScene
         int triOffset = 0;
         for (int i = 0; i < bvhList.Count; ++i)
         {
-            tinybvh.BVH bvh = bvhList[i];
-
-            int nodesSize = nod;
-            int trisSize = bvh.GetCWBVHTrisSize();
+            int bvhIndex = bvhList[i];
+            int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
+            int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
 
             IntPtr nodesPtr, trisPtr;
-            if (bvh.GetCWBVHData(out nodesPtr, out trisPtr))
+            if (TinyBVH.GetCWBVHData(bvhIndex, out nodesPtr, out trisPtr))
             {
                 Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, kBVHNodeSize, totalNodeSize, nodeOffset);
                 Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, kBVHTriSize, totalTriSize, triOffset);
@@ -549,10 +545,10 @@ public class BVHScene
 
             nodeOffset += nodesSize;
             triOffset += trisSize;
+
+            TinyBVH.DestroyBVH(bvhIndex);
         }*/
 
-        foreach (tinybvh.BVH bvh in bvhList)
-            bvh.Destroy();
 
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 
@@ -679,7 +675,7 @@ public class BVHScene
         Debug.Log($"GPU readback took: {readbackTime.TotalMilliseconds:n0}ms");
 
         // In the editor if we exit play mode before the bvh is finished building the memory will be freed
-        // and tinybvh will illegal access and crash everything. 
+        // and TinyBVH will illegal access and crash everything. 
         #if UNITY_EDITOR
             NativeArray<Vector4> persistentBuffer = new NativeArray<Vector4>(_vertexPositionBufferCPU.Length, Allocator.Persistent);
             persistentBuffer.CopyFrom(_vertexPositionBufferCPU);
@@ -688,10 +684,8 @@ public class BVHScene
             IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(_vertexPositionBufferCPU);
         #endif
 
-        tinybvh.BVH bvh = new tinybvh.BVH();
-        
         DateTime bvhStartTime = DateTime.UtcNow;
-        bvh.Build(dataPointer, _totalTriangleCount);
+        int bvhIndex = TinyBVH.BuildBVH(dataPointer, _totalTriangleCount);
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 
         Debug.Log($"Building BVH took: {bvhTime.TotalMilliseconds:n0}ms");
@@ -701,11 +695,10 @@ public class BVHScene
         #endif
 
         // Get the sizes of the arrays
-        int nodesSize = bvh.GetCWBVHNodesSize();
-        int trisSize = bvh.GetCWBVHTrisSize();
+        int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
+        int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
 
-        IntPtr nodesPtr, trisPtr;
-        if (bvh.GetCWBVHData(out nodesPtr, out trisPtr))
+        if (TinyBVH.GetCWBVHData(bvhIndex, out IntPtr nodesPtr, out IntPtr trisPtr))
         {
             Utilities.UploadFromPointer(ref _bvhNodesBuffer, nodesPtr, nodesSize, kBVHNodeSize);
             Utilities.UploadFromPointer(ref _bvhTrianglesBuffer, trisPtr, trisSize, kBVHTriSize);
@@ -716,6 +709,7 @@ public class BVHScene
             Debug.LogError("Failed to fetch updated BVH data.");
         }
 
-        bvh.Destroy();
+        // We're all done with this BVH data
+        TinyBVH.DestroyBVH(bvhIndex);
     }
 }
