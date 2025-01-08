@@ -26,8 +26,8 @@ public class PathTracer : MonoBehaviour
     public int maxSamples = 100000;
     public int maxRayBounces = 5;
     public bool backfaceCulling = false;
-    public float folalLength = 10.0f;
-    public float aperature = 0.0f;
+    public float focalLength = 10.0f;
+    public float aperture = 0.0f;
     public float skyTurbidity = 1.0f;
     public EnvironmentMode environmentMode = EnvironmentMode.Environment;
     public Color environmentColor = Color.white;
@@ -61,8 +61,11 @@ public class PathTracer : MonoBehaviour
     RenderTexture _envTextureCopy;
     DateTime _environmentReadbackStartTime;
     bool _environmentTextureReady = false;
+
     float _lastEnvironmentMapRotation = 0.0f;
-    
+    float _lastAperture = 0.0f;
+    float _lastFocalLength = 0.0f;
+
     int _currentRT = 0;
     int _currentSample = 0;
 
@@ -100,6 +103,8 @@ public class PathTracer : MonoBehaviour
         _hasLightsKeyword = _pathTracerShader.keywordSpace.FindKeyword("HAS_LIGHTS");
 
         _lastEnvironmentMapRotation = environmentMapRotation;
+        _lastAperture = aperture;
+        _lastFocalLength = focalLength;
 
         //bool hasLight = false;
         Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
@@ -207,9 +212,13 @@ public class PathTracer : MonoBehaviour
 
     void Update()
     {
-        if (_lastEnvironmentMapRotation != environmentMapRotation)
+        if (_lastEnvironmentMapRotation != environmentMapRotation ||
+            _lastAperture != aperture ||
+            _lastFocalLength != focalLength)
         {
             _lastEnvironmentMapRotation = environmentMapRotation;
+            _lastAperture = aperture;
+            _lastFocalLength = focalLength;
             Reset();
         }
         UpdateLights();
@@ -428,5 +437,8 @@ public class PathTracer : MonoBehaviour
         _cmd.SetComputeFloatParam(shader, "EnvironmentIntensity", environmentIntensity);
         _cmd.SetComputeVectorParam(shader, "EnvironmentColor", environmentColor);
         _cmd.SetComputeFloatParam(shader, "EnvironmentMapRotation", environmentMapRotation);
+
+        _cmd.SetComputeFloatParam(shader, "FocalLength", focalLength);
+        _cmd.SetComputeFloatParam(shader, "Aperture", aperture);
     }
 }

@@ -35,7 +35,7 @@ void PathTracer(uint3 id : SV_DispatchThreadID)
 
         float2 pixelCoordsSample = pixelCoords + randomSample;
 
-        Ray ray = GetScreenRay(pixelCoordsSample);
+        Ray ray = GetScreenRay(pixelCoordsSample, rngState);
 
         color += PathTrace(ray, rngState);
     }

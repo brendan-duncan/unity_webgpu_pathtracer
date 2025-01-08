@@ -8,22 +8,9 @@
 #define INV_TWO_PI 0.15915494309189533
 #define INV_4_PI   0.07957747154594766
 
-#define DEGREES_TO_RADIANS (PI / 180.0f)
-
-float Luminance(float3 color)
-{
-    return dot(color, float3(0.299f, 0.587f, 0.114f));
-}
-
-float Sqr(float x)
-{
-    return x * x;
-}
-
 uint MaxRayBounces;
 uint CurrentSample;
 float FarPlane;
-
 uint OutputWidth;
 uint OutputHeight;
 RWTexture2D<float4> Output;
@@ -44,6 +31,16 @@ struct LightSampleRec
     float distance;
     float pdf;
 };
+
+float Luminance(float3 color)
+{
+    return dot(color, float3(0.299f, 0.587f, 0.114f));
+}
+
+float Sqr(float x)
+{
+    return x * x;
+}
 
 uint ExtractByte(uint value, uint byteIndex)
 {
@@ -105,6 +102,61 @@ float chiPlus(float x)
 	return step(0.0f, x);
 }
 
+void ConcentricSampleDisk(float u1, float u2, out float dx, out float dy)
+{
+    // Map uniform random numbers to [-1,1]^2
+    float sx = 2.0f * u1 - 1.0f;
+    float sy = 2.0f * u2 - 1.0f;
+
+    // Map square to (r,\theta)
+
+    // Handle degeneracy at the origin
+    if (sx == 0.0f && sy == 0.0f)
+    {
+        dx = 0.0f;
+        dy = 0.0f;
+    }
+    else
+    {
+        float r, theta;
+        if (sx >= -sy)
+        {
+            if (sx > sy)
+            {
+                // Handle first region of disk
+                r = sx;
+                if (sy > 0.0)
+                    theta = sy / r;
+                else
+                    theta = 8.0 + sy / r;
+            }
+            else
+            {
+                // Handle second region of disk
+                r = sy;
+                theta = 2.0 - sx / r;
+            }
+        }
+        else
+        {
+            if (sx <= sy)
+            {
+                // Handle third region of disk
+                r = -sx;
+                theta = 4.0 - sy / r;
+            } else {
+                // Handle fourth region of disk
+                r = -sy;
+                theta = 6.0 + sx / r;
+            }
+        }
+
+        theta *= PI / 4.0;
+
+        dx = r * cos(theta);
+        dy = r * sin(theta);
+    }
+}
 
 #define ONB_METHOD 1
 
