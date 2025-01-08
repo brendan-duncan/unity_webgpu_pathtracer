@@ -7,7 +7,7 @@ project(unity-webgpu-pathtracer-plugin)
 set(CMAKE_CXX_STANDARD 17)
 
 add_library(unity-webgpu-pathtracer-plugin SHARED
-    ../Assets/Plugins/Web/src/plugin.cpp
+    ../Assets/Plugins/Web/plugin.cpp
 )
 
 if(WIN32)
