@@ -332,7 +332,7 @@ public class BVHScene
 
                     textureDataOffset += totalPixels;
                 }
-                
+
                 _textureDescriptorBuffer.SetData(textureDescriptorData);
 
                 Debug.Log($"Total texture data size: {(totalTextureSize * 16):n0} bytes");
@@ -483,7 +483,7 @@ public class BVHScene
         #else
             IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(_vertexPositionBufferCPU2);
         #endif
-        
+
         DateTime bvhStartTime = DateTime.UtcNow;
 
         int totalNodeSize = 0;
@@ -508,10 +508,10 @@ public class BVHScene
             //Debug.Log($"Data Ptr: {dataPointer}");
             //Debug.Log($"Mesh Ptr: {meshPtr}");
 
-            /*int bvhIndex = TinyBVH.BuildBVH(meshPtr, meshTriangleCount);
+            int bvhIndex = TinyBVH.BuildBVH(meshPtr, meshTriangleCount);
             //int bvhIndex = TinyBVH.BuildBVH(dataPointer, meshTriangleCount);
             bvhList.Add(bvhIndex);
-            
+
             // Get the sizes of the arrays
             int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
             int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
@@ -521,11 +521,11 @@ public class BVHScene
 
             totalNodeSize += nodesSize;
             totalTriSize += trisSize;
-            Debug.Log($"!!!! BVH Data Size: nodes:{nodesSize:n0} triangles:{trisSize:n0}");*/
+            Debug.Log($"!!!! BVH Data Size: nodes:{nodesSize:n0} triangles:{trisSize:n0}");
         }
 
         Debug.Log($"!!!! Total BVH Data Size: nodes:{totalNodeSize:n0} triangles:{totalTriSize:n0}");
-        /*_bvhNodesBuffer2 = new ComputeBuffer(totalNodeSize / 4, 4);
+        _bvhNodesBuffer2 = new ComputeBuffer(totalNodeSize / 4, 4);
         _bvhTrianglesBuffer2 = new ComputeBuffer(totalTriSize / 4, 4);
 
         int nodeOffset = 0;
@@ -547,8 +547,7 @@ public class BVHScene
             triOffset += trisSize;
 
             TinyBVH.DestroyBVH(bvhIndex);
-        }*/
-
+        }
 
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 
@@ -608,7 +607,7 @@ public class BVHScene
 
             GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
             GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
-            
+
             int triangleCount = Utilities.GetTriangleCount(mesh);
 
             // Determine where in the Unity vertex buffer each vertex attribute is

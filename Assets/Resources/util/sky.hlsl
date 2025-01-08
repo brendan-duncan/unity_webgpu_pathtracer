@@ -21,9 +21,9 @@ float EnvironmentCdfSum;
 float EnvironmentMapRotation;
 #endif
 
-#define TERRESTRIAL_SOLAR_RADIUS (0.255f * DEGREES_TO_RADIANS)
-#define SOLAR_COS_THETA_MAX cos(TERRESTRIAL_SOLAR_RADIUS)
-#define SOLAR_INV_PDF (2.0f * PI * (1.0f - SOLAR_COS_THETA_MAX))
+#define TERRESTRIAL_SOLAR_RADIUS 0.0044505896f // (0.255f * DEGREES_TO_RADIANS)
+#define SOLAR_COS_THETA_MAX 0.99999009614f // cos(TERRESTRIAL_SOLAR_RADIUS)
+#define SOLAR_INV_PDF 0.00006222777f // (2.0f * PI * (1.0f - SOLAR_COS_THETA_MAX))
 
 float2 BinarySearch(float value)
 {
