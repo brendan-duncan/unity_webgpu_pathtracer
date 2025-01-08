@@ -26,10 +26,12 @@ Ray GetScreenRay(float2 pixelCoords, inout uint rngState)
         float sampleLensV = RandomFloat(rngState);
         float lensU, lensV;
         ConcentricSampleDisk(sampleLensU, sampleLensV, lensU, lensV);
-        lensU *= Aperture;// * 0.5f;
-        lensV *= Aperture;// * 0.5f;
 
-        float ft = FocalLength / direction.z;
+        float lensRadius = Aperture * 0.5f;
+        lensU *= lensRadius;
+        lensV *= lensRadius;
+
+        float ft = FocalLength;
         float3 focalPoint = origin + direction * ft;
 
         origin = mul(CamToWorld, float4(lensU, lensV, 0.0f, 1.0f)).xyz;
