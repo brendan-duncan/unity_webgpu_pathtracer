@@ -105,19 +105,26 @@ tinybvh::BVH4_GPU* GetTLAS(int index)
 
 extern "C" int BuildTLAS(tinybvh::bvhaabb* aabbs, int instanceCount)
 {
-    printf("[A]\n");
+    tinybvh::bvhaabb* aabbList = aabbs;
+    bool tempMemory = false;
+    // tinybvh wants the aabbs to be cacheline aligned.
+    if (((long long)(void*)aabbs & 31) != 0)
+    {
+        aabbList = (tinybvh::bvhaabb*)tinybvh::malloc64(sizeof(tinybvh::bvhaabb) * instanceCount);
+        memcpy(aabbList, aabbs, sizeof(tinybvh::bvhaabb) * instanceCount);
+        tempMemory = true;
+    }
+
     tinybvh::BVH bvh;
     bvh.BuildTLAS(aabbs, instanceCount);
 
-    printf("[B]\n");
-    //tinybvh::BVH4_GPU* bvhGPU = new tinybvh::BVH4_GPU();
-    //bvhGPU->ConvertFrom(bvh);
-    //printf("[C]\n");
-    //return AddTLAS(bvhGPU);
+    tinybvh::BVH4_GPU* bvhGPU = new tinybvh::BVH4_GPU();
+    bvhGPU->ConvertFrom(bvh);
 
-    for (int i = 0; i < instanceCount; ++i)
-        printf("AABB %d: (%f, %f, %f) - (%f, %f, %f)\n", i, aabbs[i].minBounds.x, aabbs[i].minBounds.y, aabbs[i].minBounds.z, aabbs[i].maxBounds.x, aabbs[i].maxBounds.y, aabbs[i].maxBounds.z);
-    return 0;
+    if (tempMemory)
+        tinybvh::free64(aabbList);
+
+    return AddTLAS(bvhGPU);
 }
 
 extern "C" void DestroyTLAS(int index)

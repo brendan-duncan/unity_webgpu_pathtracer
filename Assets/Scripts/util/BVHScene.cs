@@ -77,7 +77,7 @@ public class BVHScene
         _textureCopyShader = Resources.Load<ComputeShader>("CopyTextureData");
 
         ProcessMeshes();
-        ProcessMeshes2();
+        //ProcessMeshes2();
     }
 
     public void OnDestroy()

@@ -6,20 +6,6 @@ using UnityEngine.Rendering;
 
 internal static class Utilities
 {
-    public struct DebugRay
-    {
-        public Vector3 origin;
-        public Vector3 direction;
-    };
-
-    public struct DebugRayHit
-    {
-        public float t;
-        public Vector2 barycentric;
-        public uint triIndex;
-        public uint steps;
-    };
-
     // Finds the offset of an attribute as well as the vertex stride.
     public static void FindVertexAttribute(Mesh mesh, VertexAttribute targetAttribute, out int attributeOffset, out int vertexStride)
     {
@@ -30,9 +16,7 @@ internal static class Utilities
         foreach (var attribute in vertexAttributes)
         {
             if (attribute.attribute == targetAttribute)
-            {
                 attributeOffset = vertexStride;
-            }
 
             // Increment vertexStride by the size of the current attribute
             switch (attribute.format)
@@ -65,9 +49,7 @@ internal static class Utilities
     {
         int result = 0;
         for (int i = 0; i < mesh.subMeshCount; ++i)
-        {
             result += (int)mesh.GetIndexCount(i) / 3;
-        }
         return result;
     }
 
@@ -144,7 +126,6 @@ internal static class Utilities
         #endif
 
         PrepareBuffer(ref buffer, bufferSize / dataStride, dataStride);
-        Debug.Log($"SetData ptrSize:{nativeArray.Length} offset:{bufferOffset} count:{dataSize / dataStride}");
         buffer.SetData(nativeArray, 0, bufferOffset/dataStride, dataSize/dataStride);
 
         #if ENABLE_UNITY_COLLECTIONS_CHECKS
