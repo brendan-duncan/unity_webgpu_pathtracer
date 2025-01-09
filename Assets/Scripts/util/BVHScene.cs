@@ -525,8 +525,8 @@ public class BVHScene
 
             if (TinyBVH.GetCWBVHData(bvhIndex, out IntPtr nodesPtr, out IntPtr trisPtr))
             {
-                Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, 4/*kBVHNodeSize*/, totalNodeSize, nodeOffset);
-                Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, /*kBVHTriSize*/4, totalTriSize, triOffset);
+                Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, 4, totalNodeSize, nodeOffset);
+                Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, 4, totalTriSize, triOffset);
             }
 
             nodeOffset += nodesSize;
@@ -597,11 +597,10 @@ public class BVHScene
             int triangleCount = Utilities.GetTriangleCount(mesh);
 
             // Determine where in the Unity vertex buffer each vertex attribute is
-            int vertexStride, positionOffset, normalOffset, uvOffset, tangentOffset;
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out positionOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out normalOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out tangentOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out uvOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out int positionOffset, out int vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out int normalOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out int tangentOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out int uvOffset, out vertexStride);
 
             _meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
             if (indexBuffer != null)
