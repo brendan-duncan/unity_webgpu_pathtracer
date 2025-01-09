@@ -6,6 +6,14 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Experimental.Rendering;
 
+struct BVHInstance
+{
+    public Matrix4x4 transform;
+    public int materialIndex;
+    public int bvhOffset;
+    public int triOffset;
+};
+
 public class BVHScene
 {
     ComputeShader _meshProcessingShader;
@@ -15,7 +23,7 @@ public class BVHScene
     LocalKeyword _hasNormalsKeyword;
     LocalKeyword _hasUVsKeyword;
     LocalKeyword _hasTangentsKeyword;
-    
+
     int _totalVertexCount = 0;
     int _totalTriangleCount = 0;
     DateTime _readbackStartTime;
@@ -46,6 +54,7 @@ public class BVHScene
     List<Mesh> _meshes = new();
     List<int> _meshStartIndices = new();
     List<int> _meshTriangleCount = new();
+    List<Material> _materials2 = new();
     int _totalVertexCount2 = 0;
     int _totalTriangleCount2 = 0;
     DateTime _readbackStartTime2;
@@ -67,8 +76,8 @@ public class BVHScene
 
         _textureCopyShader = Resources.Load<ComputeShader>("CopyTextureData");
 
-        //ProcessMeshes2();
         ProcessMeshes();
+        ProcessMeshes2();
     }
 
     public void OnDestroy()
@@ -363,12 +372,13 @@ public class BVHScene
         _totalVertexCount2 = 0;
         _totalTriangleCount2 = 0;
 
-        // Populate list of mesh renderers to trace against
-        var meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
-
         _meshes.Clear();
         _meshStartIndices.Clear();
         _meshTriangleCount.Clear();
+        _materials2.Clear();
+
+        // Populate list of mesh renderers to trace against
+        var meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
 
         // Gather info on the meshes we'll be using
         foreach (MeshRenderer renderer in meshRenderers)
@@ -487,6 +497,8 @@ public class BVHScene
         int totalTriSize = 0;
 
         List<int> bvhList = new();
+        List<int> nodeSizeList = new();
+        List<int> triSizeList = new();
 
         for (int i = 0; i < _meshes.Count; i++)
         {
@@ -504,24 +516,26 @@ public class BVHScene
             // Get the sizes of the arrays
             int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
             int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
-
-            Debug.Log($"!!!! BVH Data Size: nodeSize:{nodesSize:n0} triangleSize:{trisSize:n0}");
+            nodeSizeList.Add(nodesSize);
+            triSizeList.Add(trisSize);
 
             totalNodeSize += nodesSize;
             totalTriSize += trisSize;
         }
 
-        Debug.Log($"!!!! Total BVH Data Size: nodeSize:{totalNodeSize:n0} triangleSize:{totalTriSize:n0}");
         _bvhNodesBuffer2 = new ComputeBuffer(totalNodeSize / 4, 4);
         _bvhTrianglesBuffer2 = new ComputeBuffer(totalTriSize / 4, 4);
+
+        List<int> nodeOffsetList = new();
+        List<int> triOffsetList = new();
 
         int nodeOffset = 0;
         int triOffset = 0;
         for (int i = 0; i < bvhList.Count; ++i)
         {
             int bvhIndex = bvhList[i];
-            int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
-            int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
+            int nodesSize = nodeSizeList[i];
+            int trisSize = triSizeList[i];
 
             if (TinyBVH.GetCWBVHData(bvhIndex, out IntPtr nodesPtr, out IntPtr trisPtr))
             {
@@ -529,11 +543,68 @@ public class BVHScene
                 Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, 4, totalTriSize, triOffset);
             }
 
+            nodeOffsetList.Add(nodeOffset);
+            triOffsetList.Add(triOffset);
+
             nodeOffset += nodesSize;
             triOffset += trisSize;
 
             TinyBVH.DestroyBVH(bvhIndex);
         }
+
+        Vector4[] bounds = new Vector4[_meshes.Count * 2];
+        var meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+
+        int boundsIndex = 0;
+        List<BVHInstance> instances = new();
+        foreach (MeshRenderer renderer in meshRenderers)
+        {
+            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+            if (mesh == null || !_meshes.Contains(mesh))
+                continue;
+
+            int meshIndex = _meshes.IndexOf(mesh);
+
+            Material material = renderer.material;
+            if (!_materials2.Contains(material))
+                _materials2.Add(material);
+
+            int materialIndex = _materials2.IndexOf(material);
+
+            Matrix4x4 transform = renderer.localToWorldMatrix;
+            Bounds aabb = renderer.bounds;
+
+            bounds[boundsIndex++].Set(aabb.min.x, aabb.min.y, aabb.min.z, 0.0f);
+            bounds[boundsIndex++].Set(aabb.max.x, aabb.max.y, aabb.max.z, 0.0f);
+
+            BVHInstance instance = new();
+            instance.transform = transform;
+            instance.materialIndex = materialIndex;
+            instance.bvhOffset = nodeOffsetList[meshIndex];
+            instance.triOffset = triOffsetList[meshIndex];
+            instances.Add(instance);
+
+            Debug.Log($"OBJECT {renderer.gameObject.name} MATERIAL {materialIndex} TRANSFORM {transform}");
+        }
+
+        NativeArray<Vector4> boundsPtr = new(bounds, Allocator.Persistent);
+
+        #if UNITY_EDITOR
+            NativeArray<Vector4> boundsTmpPtr = new(boundsPtr.Length, Allocator.Persistent);
+            boundsTmpPtr.CopyFrom(boundsPtr);
+            IntPtr boundsPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(boundsTmpPtr);
+        #else
+            IntPtr boundsPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(boundsPtr);
+        #endif
+
+        int tlasIndex = TinyBVH.BuildTLAS(boundsPointer, instances.Count);
+        Debug.Log($"TLAS Index: {tlasIndex}");
+
+        #if UNITY_EDITOR
+            boundsTmpPtr.Dispose();
+        #endif
+
+        boundsPtr.Dispose();
 
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 

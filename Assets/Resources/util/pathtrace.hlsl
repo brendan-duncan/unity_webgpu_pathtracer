@@ -24,7 +24,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
     bool surfaceScatter = false;
 
     const uint maxRayBounces = max(MaxRayBounces, 1u);
-    
+
     for (uint rayDepth = 0; ; ++rayDepth)
     {
         RayHit hit = RayIntersect(ray);
@@ -47,7 +47,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled
         radiance += material.emission * throughput;
 
-        if (rayDepth == maxRayBounces)
+        if (rayDepth >= maxRayBounces)
             break;
 
         surfaceScatter = true;
@@ -63,7 +63,6 @@ float3 PathTrace(Ray ray, inout uint rngState)
         {
             // Next event estimation
             radiance += DirectLight(ray, hit, material, rngState) * throughput;
-            //return radiance;
 
             // Sample BSDF for color and outgoing direction
             scatterSample.f = DisneySample(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngState);

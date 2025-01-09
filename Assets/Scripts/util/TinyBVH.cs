@@ -23,7 +23,7 @@ public class TinyBVH
 
     [DllImport(libraryName)]
     public static extern int GetCWBVHNodesSize(int index);
-    
+
     [DllImport(libraryName)]
     public static extern int GetCWBVHTrisSize(int index);
 

@@ -105,13 +105,19 @@ tinybvh::BVH4_GPU* GetTLAS(int index)
 
 extern "C" int BuildTLAS(tinybvh::bvhaabb* aabbs, int instanceCount)
 {
+    printf("[A]\n");
     tinybvh::BVH bvh;
     bvh.BuildTLAS(aabbs, instanceCount);
 
-    tinybvh::BVH4_GPU* bvhGPU = new tinybvh::BVH4_GPU();
-    bvhGPU->ConvertFrom(bvh);
+    printf("[B]\n");
+    //tinybvh::BVH4_GPU* bvhGPU = new tinybvh::BVH4_GPU();
+    //bvhGPU->ConvertFrom(bvh);
+    //printf("[C]\n");
+    //return AddTLAS(bvhGPU);
 
-    return AddTLAS(bvhGPU);
+    for (int i = 0; i < instanceCount; ++i)
+        printf("AABB %d: (%f, %f, %f) - (%f, %f, %f)\n", i, aabbs[i].minBounds.x, aabbs[i].minBounds.y, aabbs[i].minBounds.z, aabbs[i].maxBounds.x, aabbs[i].maxBounds.y, aabbs[i].maxBounds.z);
+    return 0;
 }
 
 extern "C" void DestroyTLAS(int index)
