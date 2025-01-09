@@ -31,7 +31,6 @@ extern "C" int BuildBVH(tinybvh::bvhvec4* vertices, int triangleCount)
 {
     tinybvh::BVH8_CWBVH* cwbvh = new tinybvh::BVH8_CWBVH();
     cwbvh->Build(vertices, triangleCount);
-    
     return AddBVH(cwbvh);
 }
 

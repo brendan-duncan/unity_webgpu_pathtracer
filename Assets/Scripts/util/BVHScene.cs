@@ -15,8 +15,7 @@ public class BVHScene
     LocalKeyword _hasNormalsKeyword;
     LocalKeyword _hasUVsKeyword;
     LocalKeyword _hasTangentsKeyword;
-    LocalKeyword _hasLightsKeyword;
-
+    
     int _totalVertexCount = 0;
     int _totalTriangleCount = 0;
     DateTime _readbackStartTime;
@@ -43,6 +42,18 @@ public class BVHScene
     // Number of float/uint values in material.hlsl
     const int kMaterialSize = 28;
     const int kTextureOffset = 24;
+
+    List<Mesh> _meshes = new();
+    List<int> _meshStartIndices = new();
+    List<int> _meshTriangleCount = new();
+    int _totalVertexCount2 = 0;
+    int _totalTriangleCount2 = 0;
+    DateTime _readbackStartTime2;
+    ComputeBuffer _vertexPositionBufferGPU2;
+    NativeArray<Vector4> _vertexPositionBufferCPU2;
+    ComputeBuffer _triangleAttributesBuffer2;
+    ComputeBuffer _bvhNodesBuffer2;
+    ComputeBuffer _bvhTrianglesBuffer2;
 
     public void Start()
     {
@@ -347,19 +358,6 @@ public class BVHScene
         }
     }
 
-    List<Mesh> _meshes = new();
-    List<int> _meshStartIndices = new();
-    List<int> _meshTriangleCount = new();
-    int _totalVertexCount2 = 0;
-    int _totalTriangleCount2 = 0;
-    DateTime _readbackStartTime2;
-    ComputeBuffer _vertexPositionBufferGPU2;
-    NativeArray<Vector4> _vertexPositionBufferCPU2;
-    ComputeBuffer _triangleAttributesBuffer2;
-    ComputeBuffer _materialsBuffer2;
-    ComputeBuffer _bvhNodesBuffer2;
-    ComputeBuffer _bvhTrianglesBuffer2;
-
     public void ProcessMeshes2()
     {
         _totalVertexCount2 = 0;
@@ -371,8 +369,6 @@ public class BVHScene
         _meshes.Clear();
         _meshStartIndices.Clear();
         _meshTriangleCount.Clear();
-
-        Debug.Log("Processing Meshes");
 
         // Gather info on the meshes we'll be using
         foreach (MeshRenderer renderer in meshRenderers)
@@ -388,7 +384,6 @@ public class BVHScene
             _meshTriangleCount.Add(triangleCount);
 
             _totalVertexCount2 += triangleCount * 3;
-            _totalTriangleCount2 += triangleCount;    
         }
 
         if (_totalVertexCount2 == 0)
@@ -416,13 +411,13 @@ public class BVHScene
 
             GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
             GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
-            
+
             // Determine where in the Unity vertex buffer each vertex attribute is
-            int vertexStride, positionOffset, normalOffset, uvOffset, tangentOffset;
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out positionOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out normalOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out tangentOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out uvOffset, out vertexStride);
+            //int vertexStride, positionOffset, normalOffset, uvOffset, tangentOffset;
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out int positionOffset, out int vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out int normalOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out int tangentOffset, out vertexStride);
+            Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out int uvOffset, out vertexStride);
 
             // Material will be stored in the TLAS instance info
             int materialIndex = -1;
@@ -454,6 +449,8 @@ public class BVHScene
 
             vertexBuffer?.Release();
             indexBuffer?.Release();
+
+            _totalTriangleCount2 += triangleCount;
         }
 
         Debug.Log($"Meshes processed.");
@@ -477,7 +474,7 @@ public class BVHScene
         // In the editor if we exit play mode before the bvh is finished building the memory will be freed
         // and TinyBVH will illegal access and crash everything. 
         #if UNITY_EDITOR
-            NativeArray<Vector4> persistentBuffer = new NativeArray<Vector4>(_vertexPositionBufferCPU2.Length, Allocator.Persistent);
+            NativeArray<Vector4> persistentBuffer = new(_vertexPositionBufferCPU2.Length, Allocator.Persistent);
             persistentBuffer.CopyFrom(_vertexPositionBufferCPU2);
             IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(persistentBuffer);
         #else
@@ -488,9 +485,6 @@ public class BVHScene
 
         int totalNodeSize = 0;
         int totalTriSize = 0;
-
-        List<int> nodeOffsets = new();
-        List<int> triOffsets = new();
 
         List<int> bvhList = new();
 
@@ -503,28 +497,21 @@ public class BVHScene
             Debug.Log($"Building BVH for Mesh {i + 1}/{_meshes.Count} Triangles: {meshTriangleCount:n0} Offset: {dataPointerOffset:n0}");
 
             IntPtr meshPtr = IntPtr.Add(dataPointer, dataPointerOffset);
-            //IntPtr meshPtr = dataPointer;
-
-            //Debug.Log($"Data Ptr: {dataPointer}");
-            //Debug.Log($"Mesh Ptr: {meshPtr}");
 
             int bvhIndex = TinyBVH.BuildBVH(meshPtr, meshTriangleCount);
-            //int bvhIndex = TinyBVH.BuildBVH(dataPointer, meshTriangleCount);
             bvhList.Add(bvhIndex);
 
             // Get the sizes of the arrays
             int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
             int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
 
-            nodeOffsets.Add(totalNodeSize);
-            triOffsets.Add(totalTriSize);
+            Debug.Log($"!!!! BVH Data Size: nodeSize:{nodesSize:n0} triangleSize:{trisSize:n0}");
 
             totalNodeSize += nodesSize;
             totalTriSize += trisSize;
-            Debug.Log($"!!!! BVH Data Size: nodes:{nodesSize:n0} triangles:{trisSize:n0}");
         }
 
-        Debug.Log($"!!!! Total BVH Data Size: nodes:{totalNodeSize:n0} triangles:{totalTriSize:n0}");
+        Debug.Log($"!!!! Total BVH Data Size: nodeSize:{totalNodeSize:n0} triangleSize:{totalTriSize:n0}");
         _bvhNodesBuffer2 = new ComputeBuffer(totalNodeSize / 4, 4);
         _bvhTrianglesBuffer2 = new ComputeBuffer(totalTriSize / 4, 4);
 
@@ -536,11 +523,10 @@ public class BVHScene
             int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
             int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
 
-            IntPtr nodesPtr, trisPtr;
-            if (TinyBVH.GetCWBVHData(bvhIndex, out nodesPtr, out trisPtr))
+            if (TinyBVH.GetCWBVHData(bvhIndex, out IntPtr nodesPtr, out IntPtr trisPtr))
             {
-                Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, kBVHNodeSize, totalNodeSize, nodeOffset);
-                Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, kBVHTriSize, totalTriSize, triOffset);
+                Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, 4/*kBVHNodeSize*/, totalNodeSize, nodeOffset);
+                Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, /*kBVHTriSize*/4, totalTriSize, triOffset);
             }
 
             nodeOffset += nodesSize;
@@ -676,7 +662,7 @@ public class BVHScene
         // In the editor if we exit play mode before the bvh is finished building the memory will be freed
         // and TinyBVH will illegal access and crash everything. 
         #if UNITY_EDITOR
-            NativeArray<Vector4> persistentBuffer = new NativeArray<Vector4>(_vertexPositionBufferCPU.Length, Allocator.Persistent);
+            NativeArray<Vector4> persistentBuffer = new(_vertexPositionBufferCPU.Length, Allocator.Persistent);
             persistentBuffer.CopyFrom(_vertexPositionBufferCPU);
             IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(persistentBuffer);
         #else

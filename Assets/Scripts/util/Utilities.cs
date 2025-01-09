@@ -129,7 +129,8 @@ internal static class Utilities
         #endif
     }
 
-    public unsafe static void UploadFromPointer2(ref ComputeBuffer buffer, IntPtr dataPtr, int dataSize, int dataStride, int bufferSize, int bufferOffset)
+    public unsafe static void UploadFromPointer2(ref ComputeBuffer buffer, IntPtr dataPtr, int dataSize, int dataStride,
+        int bufferSize, int bufferOffset)
     {
         NativeArray<float> nativeArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<float>(
             dataPtr.ToPointer(),
@@ -143,7 +144,8 @@ internal static class Utilities
         #endif
 
         PrepareBuffer(ref buffer, bufferSize / dataStride, dataStride);
-        buffer.SetData(nativeArray, 0, bufferOffset, dataSize / dataStride);
+        Debug.Log($"SetData ptrSize:{nativeArray.Length} offset:{bufferOffset} count:{dataSize / dataStride}");
+        buffer.SetData(nativeArray, 0, bufferOffset/dataStride, dataSize/dataStride);
 
         #if ENABLE_UNITY_COLLECTIONS_CHECKS
             AtomicSafetyHandle.CheckDeallocateAndThrow(atomicSafetyHandle);
