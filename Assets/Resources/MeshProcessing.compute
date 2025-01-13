@@ -60,12 +60,10 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
 {
     uint triIndex = id.x;
     if (triIndex >= TriangleCount)
-    {
         return;
-    }
-    
+
     uint3 vertIndices;
-    
+
     #if HAS_INDEX_BUFFER
         #if HAS_32_BIT_INDICES
             uint triStride = 3 * 4; // 32-bit index buffer
@@ -77,7 +75,7 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
             uint alignedOffset = byteOffset & ~3;
             uint2 packedWords = IndexBuffer.Load2(alignedOffset);
             uint offsetInWord = byteOffset % 4;
-        
+
             vertIndices.x = (offsetInWord == 0) ? (packedWords.x & 0xFFFF) : (packedWords.x >> 16);
             vertIndices.y = (offsetInWord == 0) ? (packedWords.x >> 16)    : (packedWords.y & 0xFFFF);
             vertIndices.z = (offsetInWord == 0) ? (packedWords.y & 0xFFFF) : (packedWords.y >> 16);
@@ -85,16 +83,16 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
     #else
         vertIndices = uint3(triIndex * 3, (triIndex * 3) + 1, (triIndex * 3) + 2);
     #endif
-    
+
     float3 vert0 = ReadVertexPosition(vertIndices.x);
     float3 vert1 = ReadVertexPosition(vertIndices.y);
     float3 vert2 = ReadVertexPosition(vertIndices.z);
-    
+
     // Transform vertex positions to world space
     vert0 = mul(LocalToWorld, float4(vert0.xyz, 1)).xyz;
     vert1 = mul(LocalToWorld, float4(vert1.xyz, 1)).xyz;
     vert2 = mul(LocalToWorld, float4(vert2.xyz, 1)).xyz;
-    
+
     // Write vertex positions into buffer
     int writeTriIndex = OutputTriangleStart + triIndex;
     int writeIndex = writeTriIndex * 3;
@@ -108,7 +106,7 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
         attr.normal0 = ReadVertexNormal(vertIndices.x);
         attr.normal1 = ReadVertexNormal(vertIndices.y);
         attr.normal2 = ReadVertexNormal(vertIndices.z);
-    
+
         // Transform normals to world space
         attr.normal0 = mul(LocalToWorld, float4(attr.normal0.xyz, 0)).xyz;
         attr.normal1 = mul(LocalToWorld, float4(attr.normal1.xyz, 0)).xyz;
@@ -119,7 +117,7 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
         attr.tangent0 = ReadVertexTangent(vertIndices.x);
         attr.tangent1 = ReadVertexTangent(vertIndices.y);
         attr.tangent2 = ReadVertexTangent(vertIndices.z);
-    
+
         // Transform normals to world space
         attr.tangent0 = mul(LocalToWorld, float4(attr.tangent0.xyz, 0)).xyz;
         attr.tangent1 = mul(LocalToWorld, float4(attr.tangent1.xyz, 0)).xyz;
@@ -133,6 +131,6 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
     #endif
 
     attr.materialIndex = MaterialIndex;
-    
+
     TriangleAttributesBuffer[writeTriIndex] = attr;
 }

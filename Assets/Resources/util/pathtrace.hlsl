@@ -1,14 +1,13 @@
 #ifndef __UNITY_PATHTRACER_PATHTRACE_HLSL__
 #define __UNITY_PATHTRACER_PATHTRACE_HLSL__
 
-#include "bvh.hlsl"
 #include "common.hlsl"
+#include "bvh.hlsl"
 #include "disney_brdf.hlsl"
 #include "light.hlsl"
 #include "material.hlsl"
 #include "ray.hlsl"
 #include "sky.hlsl"
-#include "tlas.hlsl"
 
 float3 PathTrace(Ray ray, inout uint rngState)
 {
@@ -39,6 +38,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
                 misWeight = PowerHeuristic(scatterSample.pdf, skyColorPDf.w);
             if (misWeight > 0)
                 radiance += misWeight * skyColorPDf.rgb * throughput;
+            //radiance = float3(0.0f, 0.0f, 1.0f);
             break;
         }
 

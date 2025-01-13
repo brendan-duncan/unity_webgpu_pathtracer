@@ -10,6 +10,7 @@ struct Material
     float4 data5;
     float4 data6;
     float4 textures;
+    float4 texture1Transform;
 };
 StructuredBuffer<Material> Materials;
 
@@ -58,24 +59,24 @@ float4 SampleTexture(int textureIndex, float2 uv, bool linearSample)
         uint width = TextureDescriptors[textureIndex].width;
         uint height = TextureDescriptors[textureIndex].height;
 
-        uv.x = fmod(uv.x, 1.0f);
-        uv.y = fmod(uv.y, 1.0f);
-        if (uv.x < 0.0f)
-        {
-            uv.x += 1.0f;
-        }
-        if (uv.y < 0.0f)
-        {
-            uv.y += 1.0f;
-        }
+        float u = uv.x;
+        float v = uv.y;
+        if (u > 1.0f || u < 0.0f)
+            u = fmod(u, 1.0f);
+        if (v > 1.0f || v < 0.0f)
+            v = fmod(v, 1.0f);
+        while (u < 0.0f)
+            u += 1.0f;
+        while (v < 0.0f)
+            v += 1.0f;
 
-        float u = uv.x * (width - 1.0f);
-        float v = uv.y * (height - 1.0f);
+        float tu = u * (width - 1.0f);
+        float tv = v * (height - 1.0f);
 
-        uint x = (uint)(u);
-        uint y = (uint)(v);
+        uint tx = (uint)(tu);
+        uint ty = (uint)(tv);
 
-        float4 p1 = GetTexturePixel(offset, width, height, x, y);
+        float4 p1 = GetTexturePixel(offset, width, height, tx, ty);
 
         if (!linearSample)
         {
@@ -83,14 +84,12 @@ float4 SampleTexture(int textureIndex, float2 uv, bool linearSample)
         }
         else
         {
-            float uFraction = u - x;
-            float vFraction = v - y;
-            float4 p2 = GetTexturePixel(offset, width, height, x + 1, y);
-            float4 p3 = GetTexturePixel(offset, width, height, x, y + 1);
-            float4 p4 = GetTexturePixel(offset, width, height, x + 1, y + 1);
-
+            float uFraction = tu - tx;
+            float vFraction = tv - ty;
+            float4 p2 = GetTexturePixel(offset, width, height, tx + 1, ty);
+            float4 p3 = GetTexturePixel(offset, width, height, tx, ty + 1);
+            float4 p4 = GetTexturePixel(offset, width, height, tx + 1, ty + 1);
             float4 pixel = lerp(lerp(p1, p2, uFraction), lerp(p3, p4, uFraction), vFraction);
-
             return pixel;
         }
     }
@@ -103,9 +102,7 @@ float3 GetEmission(Material material, float2 uv)
 {
     #if HAS_TEXTURES
     if (material.textures.w < 0.0f)
-    {
         return material.data2.rgb;
-    }
     else
     {
         float4 pixel = SampleTexture((int)material.textures.w, uv, true);
@@ -120,9 +117,7 @@ float3 GetNormalMapSample(Material material, float2 uv)
 {
 #if HAS_TEXTURES
     if (material.textures.z < 0.0f)
-    {
         return float3(0.0f, 0.0f, 1.0f);
-    }
     else
     {
         float4 pixel = SampleTexture((int)material.textures.z, uv, false);
@@ -137,9 +132,7 @@ float2 GetMetallicRoughness(Material material, float2 uv)
 {
 #if HAS_TEXTURES
     if (material.textures.y < 0.0f)
-    {
         return material.data3.rg;
-    }
     else
     {
         float4 pixel = SampleTexture((int)material.textures.y, uv, true);
@@ -154,12 +147,12 @@ float4 GetBaseColorOpacity(Material material, float2 uv)
 {
 #if HAS_TEXTURES
     if (material.textures.x < 0.0f)
-    {
         return material.data1;
-    }
     else
-    {  
-        return SampleTexture((int)material.textures.x, uv, true);
+    {
+        uv = uv * material.texture1Transform.xy + material.texture1Transform.zw;
+        float4 pixel = SampleTexture((int)material.textures.x, uv, true);
+        return pixel * material.data1;
     }
 #else
     return material.data1;

@@ -75,3 +75,6 @@ UpgradeLog.htm
 /web
 Plugin/build
 .vscode
+
+# Local Netlify folder
+.netlify

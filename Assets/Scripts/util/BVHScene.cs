@@ -8,10 +8,19 @@ using UnityEngine.Experimental.Rendering;
 
 struct BVHInstance
 {
-    public Matrix4x4 transform;
-    public int materialIndex;
+    public int materialIndex; 
     public int bvhOffset;
     public int triOffset;
+    public int triAttributeOffset;
+    public Matrix4x4 transform;
+    public Matrix4x4 inverseTransform;
+};
+
+struct BLASInstance
+{
+    public Matrix4x4 transform;
+    public Matrix4x4 inverseTransform;
+    public IntPtr blas;
 };
 
 public class BVHScene
@@ -45,24 +54,22 @@ public class BVHScene
     // Struct sizes in bytes
     const int kVertexPositionSize = 16;
     const int kTriangleAttributeSize = 100;
+    const int kBVHInstanceSize = 144;
     const int kBVHNodeSize = 80;
     const int kBVHTriSize = 16;
-    // Number of float/uint values in material.hlsl
-    const int kMaterialSize = 28;
+    // Number of float values in material.hlsl
+    const int kMaterialSize = 32;
     const int kTextureOffset = 24;
 
     List<Mesh> _meshes = new();
     List<int> _meshStartIndices = new();
     List<int> _meshTriangleCount = new();
-    List<Material> _materials2 = new();
-    int _totalVertexCount2 = 0;
-    int _totalTriangleCount2 = 0;
-    DateTime _readbackStartTime2;
-    ComputeBuffer _vertexPositionBufferGPU2;
-    NativeArray<Vector4> _vertexPositionBufferCPU2;
-    ComputeBuffer _triangleAttributesBuffer2;
-    ComputeBuffer _bvhNodesBuffer2;
-    ComputeBuffer _bvhTrianglesBuffer2;
+    List<int> _triangleAttributeOffsets = new();
+    List<int> _vertexPositionOffsets = new();
+
+    int _tlasInstanceCount = 0;
+    ComputeBuffer _tlasNodesBuffer;
+    ComputeBuffer _instancesBuffer;
 
     public void Start()
     {
@@ -76,8 +83,7 @@ public class BVHScene
 
         _textureCopyShader = Resources.Load<ComputeShader>("CopyTextureData");
 
-        ProcessMeshes();
-        //ProcessMeshes2();
+       ProcessMeshes();
     }
 
     public void OnDestroy()
@@ -91,11 +97,8 @@ public class BVHScene
         _textureDescriptorBuffer?.Release();
         _textureDataBuffer?.Release();
 
-        _vertexPositionBufferGPU2?.Release();
-        _triangleAttributesBuffer2?.Release();
-        _vertexPositionBufferCPU2.Dispose();
-        _bvhNodesBuffer2?.Release();
-        _bvhTrianglesBuffer2?.Release();
+        _tlasNodesBuffer?.Release();
+        _instancesBuffer?.Release();
     }
 
     public void Update()
@@ -121,7 +124,9 @@ public class BVHScene
         cmd.SetComputeBufferParam(shader, kernelIndex, "BVHTris", _bvhTrianglesBuffer);
         cmd.SetComputeBufferParam(shader, kernelIndex, "TriangleAttributesBuffer", _triangleAttributesBuffer);
         cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", _materialsBuffer);
-        cmd.SetComputeIntParam(shader, "TriangleCount", 2);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "TLASNodes", _tlasNodesBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "TLASInstances", _instancesBuffer);
+        cmd.SetComputeIntParam(shader, "TLASInstanceCount", _tlasInstanceCount);
 
         if (_textureDataBuffer != null)
         {
@@ -132,65 +137,68 @@ public class BVHScene
 
     public void UpdateMaterialData(bool updateTextures)
     {
+        List<Material> materials = _materials;
         List<Texture> textures = new();
-        float[] materialData = new float[_materials.Count * kMaterialSize];
-        for (int i = 0; i < _materials.Count; i++)
+        float[] materialData = new float[materials.Count * kMaterialSize];
+        for (int i = 0; i < materials.Count; i++)
         {
+            Material material = materials[i];
+
             Color baseColor = 
-                _materials[i].HasProperty("_Color") ? _materials[i].color
-                : _materials[i].HasProperty("baseColorFactor") ? _materials[i].GetColor("baseColorFactor")
+                material.HasProperty("_Color") ? material.color
+                : material.HasProperty("baseColorFactor") ? material.GetColor("baseColorFactor")
                 : new Color(0.8f, 0.8f, 0.8f, 1.0f);
             Color emission = 
-                _materials[i].HasProperty("_EmissionColor") ? _materials[i].GetColor("_EmissionColor")
-                : _materials[i].HasProperty("emissiveFactor") ? _materials[i].GetColor("emissiveFactor")
+                material.HasProperty("_EmissionColor") ? material.GetColor("_EmissionColor")
+                : material.HasProperty("emissiveFactor") ? material.GetColor("emissiveFactor")
                 : Color.black;
             float metallic = 
-                _materials[i].HasProperty("_Metallic") ? _materials[i].GetFloat("_Metallic")
-                : _materials[i].HasProperty("metallicFactor") ? _materials[i].GetFloat("metallicFactor")
+                material.HasProperty("_Metallic") ? material.GetFloat("_Metallic")
+                : material.HasProperty("metallicFactor") ? material.GetFloat("metallicFactor")
                 : 0.0f;
             float roughness =
-                _materials[i].HasProperty("_Glossiness") ? 1.0f - _materials[i].GetFloat("_Glossiness")
-                : _materials[i].HasProperty("roughnessFactor") ? _materials[i].GetFloat("roughnessFactor")
+                material.HasProperty("_Glossiness") ? 1.0f - material.GetFloat("_Glossiness")
+                : material.HasProperty("roughnessFactor") ? material.GetFloat("roughnessFactor")
                 : 0.0f;
             float ior = 
-                _materials[i].HasProperty("_IOR") ? _materials[i].GetFloat("_IOR")
-                : _materials[i].HasProperty("ior") ? _materials[i].GetFloat("ior")
-                : 1.0f;
+                material.HasProperty("_IOR") ? material.GetFloat("_IOR")
+                : material.HasProperty("ior") ? material.GetFloat("ior")
+                : 1.1f;
             float normalScale = 
-                _materials[i].HasProperty("_BumpScale") ? _materials[i].GetFloat("_BumpScale")
-                : _materials[i].HasProperty("normalScale") ? _materials[i].GetFloat("normalScale")
+                material.HasProperty("_BumpScale") ? material.GetFloat("_BumpScale")
+                : material.HasProperty("normalScale") ? material.GetFloat("normalScale")
                 : 1.0f;
             int alphaMode = 
-                _materials[i].HasProperty("_Mode") ? ((int)_materials[i].GetFloat("_Mode") == 1 ? 2 : 0)
-                : _materials[i].HasProperty("alphaMode") ? (int)_materials[i].GetFloat("alphaMode")
+                material.HasProperty("_Mode") ? ((int)material.GetFloat("_Mode") == 1 ? 2 : 0)
+                : material.HasProperty("alphaMode") ? (int)material.GetFloat("alphaMode")
                 : 0;
             float alphaCutoff = 
-                _materials[i].HasProperty("_Cutoff") ? _materials[i].GetFloat("_Cutoff")
-                : _materials[i].HasProperty("alphaCutoff") ? _materials[i].GetFloat("alphaCutoff")
+                material.HasProperty("_Cutoff") ? material.GetFloat("_Cutoff")
+                : material.HasProperty("alphaCutoff") ? material.GetFloat("alphaCutoff")
                 : 0.5f;
             float anisotropic = 
-                _materials[i].HasProperty("anisotropicFactor") ? _materials[i].GetFloat("anisotropicFactor")
+                material.HasProperty("anisotropicFactor") ? material.GetFloat("anisotropicFactor")
                 : 0.0f;
             float specular = 
-                _materials[i].HasProperty("specularFactor") ? _materials[i].GetFloat("specularFactor")
+                material.HasProperty("specularFactor") ? material.GetFloat("specularFactor")
                 : 0.0f;
             float specularTint = 
-                _materials[i].HasProperty("specularTint") ? _materials[i].GetFloat("specularTint")
+                material.HasProperty("specularTint") ? material.GetFloat("specularTint")
                 : 0.0f;
             float sheen = 
-                _materials[i].HasProperty("sheenFactor") ? _materials[i].GetFloat("sheenFactor")
+                material.HasProperty("sheenFactor") ? material.GetFloat("sheenFactor")
                 : 0.0f;
             float sheenTint =
-                _materials[i].HasProperty("sheenTint") ? _materials[i].GetFloat("sheenTint")
+                material.HasProperty("sheenTint") ? material.GetFloat("sheenTint")
                 : 0.0f;
             float subsurface =
-                _materials[i].HasProperty("subsurfaceFactor") ? _materials[i].GetFloat("subsurfaceFactor")
+                material.HasProperty("subsurfaceFactor") ? material.GetFloat("subsurfaceFactor")
                 : 0.0f;
             float clearCoat =
-                _materials[i].HasProperty("clearCoatFactor") ? _materials[i].GetFloat("clearCoatFactor")
+                material.HasProperty("clearCoatFactor") ? material.GetFloat("clearCoatFactor")
                 : 0.0f;
             float clearCoatGloss =
-                _materials[i].HasProperty("clearCoatGloss") ? _materials[i].GetFloat("clearCoatGloss")
+                material.HasProperty("clearCoatGloss") ? material.GetFloat("clearCoatGloss")
                 : 0.0f;
 
             int mdi = i * kMaterialSize;
@@ -231,9 +239,14 @@ public class BVHScene
             materialData[mti + 2] = -1.0f; // normal texture
             materialData[mti + 3] = -1.0f; // emission texture
 
+            materialData[mti + 4] = material.mainTextureScale.x;
+            materialData[mti + 5] = material.mainTextureScale.y;
+            materialData[mti + 6] = material.mainTextureOffset.x;
+            materialData[mti + 7] = material.mainTextureOffset.y;
+
             // BaseColor texture
-            Texture mainTex = _materials[i].HasProperty("_MainTex") ? _materials[i].GetTexture("_MainTex")
-                : _materials[i].HasProperty("baseColorTexture") ? _materials[i].GetTexture("baseColorTexture")
+            Texture mainTex = material.HasProperty("_MainTex") ? material.GetTexture("_MainTex")
+                : material.HasProperty("baseColorTexture") ? material.GetTexture("baseColorTexture")
                 : null;
             if (mainTex)
             {
@@ -249,8 +262,8 @@ public class BVHScene
             }
 
             // MetallicRoughness texture
-            Texture metallicRoughnessTex = _materials[i].HasProperty("_MetallicRoughnessMap") ? _materials[i].GetTexture("_MetallicRoughnessMap")
-                : _materials[i].HasProperty("metallicRoughnessTexture") ? _materials[i].GetTexture("metallicRoughnessTexture")
+            Texture metallicRoughnessTex = material.HasProperty("_MetallicRoughnessMap") ? material.GetTexture("_MetallicRoughnessMap")
+                : material.HasProperty("metallicRoughnessTexture") ? material.GetTexture("metallicRoughnessTexture")
                 : null;
             if (metallicRoughnessTex)
             {
@@ -266,8 +279,8 @@ public class BVHScene
             }
 
             // Normal texture
-            Texture normalTex = _materials[i].HasProperty("_BumpMap") ? _materials[i].GetTexture("_BumpMap")
-                : _materials[i].HasProperty("normalTexture") ? _materials[i].GetTexture("normalTexture")
+            Texture normalTex = material.HasProperty("_BumpMap") ? material.GetTexture("_BumpMap")
+                : material.HasProperty("normalTexture") ? material.GetTexture("normalTexture")
                 : null;
             if (normalTex)
             {
@@ -283,8 +296,8 @@ public class BVHScene
             }
 
             // Emission texture
-            Texture emissionTex = _materials[i].HasProperty("_EmissionMap") ? _materials[i].GetTexture("_EmissionMap")
-                : _materials[i].HasProperty("emissiveTexture") ? _materials[i].GetTexture("emissiveTexture")
+            Texture emissionTex = material.HasProperty("_EmissionMap") ? material.GetTexture("_EmissionMap")
+                : material.HasProperty("emissiveTexture") ? material.GetTexture("emissiveTexture")
                 : null;
             if (emissionTex)
             {
@@ -367,15 +380,17 @@ public class BVHScene
         }
     }
 
-    public void ProcessMeshes2()
+    public void ProcessMeshes()
     {
-        _totalVertexCount2 = 0;
-        _totalTriangleCount2 = 0;
+        _totalVertexCount = 0;
+        _totalTriangleCount = 0;
 
         _meshes.Clear();
         _meshStartIndices.Clear();
         _meshTriangleCount.Clear();
-        _materials2.Clear();
+        _materials.Clear();
+        _triangleAttributeOffsets.Clear();
+        _vertexPositionOffsets.Clear();
 
         // Populate list of mesh renderers to trace against
         var meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
@@ -390,26 +405,30 @@ public class BVHScene
             int triangleCount = Utilities.GetTriangleCount(mesh);
 
             _meshes.Add(mesh);
-            _meshStartIndices.Add(_totalTriangleCount2);
+            _meshStartIndices.Add(_totalTriangleCount);
             _meshTriangleCount.Add(triangleCount);
 
-            _totalVertexCount2 += triangleCount * 3;
+            _totalTriangleCount += triangleCount;
+            _totalVertexCount += triangleCount * 3;
         }
 
-        if (_totalVertexCount2 == 0)
+        if (_totalVertexCount == 0)
         {
             Debug.LogError("No meshes found to process.");
             return;
         }
 
-        Debug.Log($"Total Vertices: {_totalVertexCount2:n0} Triangles: {_totalTriangleCount2:n0}");
+        Debug.Log($"Total Vertices: {_totalVertexCount:n0} Triangles: {_totalTriangleCount:n0}");
 
         // Allocate buffers
-        _vertexPositionBufferGPU2 = new ComputeBuffer(_totalVertexCount2, kVertexPositionSize);
-        _vertexPositionBufferCPU2 = new NativeArray<Vector4>(_totalVertexCount2 * kVertexPositionSize, Allocator.Persistent);
-        _triangleAttributesBuffer2 = new ComputeBuffer(_totalVertexCount2 / 3, kTriangleAttributeSize);
+        _vertexPositionBufferGPU = new ComputeBuffer(_totalVertexCount, kVertexPositionSize);
+        _vertexPositionBufferCPU = new NativeArray<Vector4>(_totalVertexCount * kVertexPositionSize, Allocator.Persistent);
+        _triangleAttributesBuffer = new ComputeBuffer(_totalTriangleCount, kTriangleAttributeSize);
 
         int meshIndex = 0;
+
+        int vertexOffset = 0;
+        int triangleOffset = 0;
 
         // Gather the data for each mesh to pass to TinyBVH. This is done in a compute shader with async readback
         // to avoid each mesh having to have read/write access.
@@ -418,12 +437,12 @@ public class BVHScene
             int triangleCount = Utilities.GetTriangleCount(mesh);
 
             Debug.Log($"Processing Mesh {meshIndex + 1}/{_meshes.Count} Triangles: {triangleCount:n0}");
+            meshIndex++;
 
             GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
             GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
 
             // Determine where in the Unity vertex buffer each vertex attribute is
-            //int vertexStride, positionOffset, normalOffset, uvOffset, tangentOffset;
             Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out int positionOffset, out int vertexStride);
             Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out int normalOffset, out vertexStride);
             Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out int tangentOffset, out vertexStride);
@@ -432,18 +451,21 @@ public class BVHScene
             // Material will be stored in the TLAS instance info
             int materialIndex = -1;
 
+            _triangleAttributeOffsets.Add(triangleOffset * kTriangleAttributeSize);
+            _vertexPositionOffsets.Add(vertexOffset * kVertexPositionSize);
+
             _meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
             if (indexBuffer != null)
                 _meshProcessingShader.SetBuffer(0, "IndexBuffer", indexBuffer);
-            _meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", _vertexPositionBufferGPU2);
-            _meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", _triangleAttributesBuffer2);
+            _meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", _vertexPositionBufferGPU);
+            _meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", _triangleAttributesBuffer);
             _meshProcessingShader.SetInt("VertexStride", vertexStride);
             _meshProcessingShader.SetInt("PositionOffset", positionOffset);
             _meshProcessingShader.SetInt("NormalOffset", normalOffset);
             _meshProcessingShader.SetInt("TangentOffset", tangentOffset);
             _meshProcessingShader.SetInt("UVOffset", uvOffset);
             _meshProcessingShader.SetInt("TriangleCount", triangleCount);
-            _meshProcessingShader.SetInt("OutputTriangleStart", _totalTriangleCount2);
+            _meshProcessingShader.SetInt("OutputTriangleStart", triangleOffset);
             _meshProcessingShader.SetInt("MaterialIndex", materialIndex);
             _meshProcessingShader.SetMatrix("LocalToWorld", Matrix4x4.identity);
 
@@ -460,17 +482,22 @@ public class BVHScene
             vertexBuffer?.Release();
             indexBuffer?.Release();
 
-            _totalTriangleCount2 += triangleCount;
+            triangleOffset += triangleCount;
+            vertexOffset += triangleCount * 3;
         }
 
         Debug.Log($"Meshes processed.");
 
         // Initiate async readback of vertex buffer to pass to TinyBVH to build
-        _readbackStartTime2 = DateTime.UtcNow;
-        AsyncGPUReadback.RequestIntoNativeArray(ref _vertexPositionBufferCPU2, _vertexPositionBufferGPU2, OnCompleteReadback2);
+        _readbackStartTime = DateTime.UtcNow;
+        AsyncGPUReadback.RequestIntoNativeArray(ref _vertexPositionBufferCPU, _vertexPositionBufferGPU, OnCompleteReadback);
     }
 
-    unsafe void OnCompleteReadback2(AsyncGPUReadbackRequest request)
+    BLASInstance[] _blasInstances;
+    BVHInstance[] _instances;
+    MeshRenderer[] _meshRenderers;
+
+    unsafe void OnCompleteReadback(AsyncGPUReadbackRequest request)
     {
         if (request.hasError)
         {
@@ -478,17 +505,17 @@ public class BVHScene
             return;
         }
 
-        TimeSpan readbackTime = DateTime.UtcNow - _readbackStartTime2;
+        TimeSpan readbackTime = DateTime.UtcNow - _readbackStartTime;
         Debug.Log($"Mesh GPU Readback Took: {readbackTime.TotalMilliseconds:n0}ms");
 
         // In the editor if we exit play mode before the bvh is finished building the memory will be freed
         // and TinyBVH will illegal access and crash everything. 
         #if UNITY_EDITOR
-            NativeArray<Vector4> persistentBuffer = new(_vertexPositionBufferCPU2.Length, Allocator.Persistent);
-            persistentBuffer.CopyFrom(_vertexPositionBufferCPU2);
+            NativeArray<Vector4> persistentBuffer = new(_vertexPositionBufferCPU.Length, Allocator.Persistent);
+            persistentBuffer.CopyFrom(_vertexPositionBufferCPU);
             IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(persistentBuffer);
         #else
-            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(_vertexPositionBufferCPU2);
+            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(_vertexPositionBufferCPU);
         #endif
 
         DateTime bvhStartTime = DateTime.UtcNow;
@@ -502,9 +529,8 @@ public class BVHScene
 
         for (int i = 0; i < _meshes.Count; i++)
         {
-            int meshStartIndex = _meshStartIndices[i];
             int meshTriangleCount = _meshTriangleCount[i];
-            int dataPointerOffset = meshStartIndex * 4 * 4 * 3;
+            int dataPointerOffset = _vertexPositionOffsets[i];
 
             Debug.Log($"Building BVH for Mesh {i + 1}/{_meshes.Count} Triangles: {meshTriangleCount:n0} Offset: {dataPointerOffset:n0}");
 
@@ -519,12 +545,14 @@ public class BVHScene
             nodeSizeList.Add(nodesSize);
             triSizeList.Add(trisSize);
 
+            Debug.Log($"BVH Nodes Size: {nodesSize:n0} Triangles Size: {trisSize:n0}");
+
             totalNodeSize += nodesSize;
             totalTriSize += trisSize;
         }
 
-        _bvhNodesBuffer2 = new ComputeBuffer(totalNodeSize / 4, 4);
-        _bvhTrianglesBuffer2 = new ComputeBuffer(totalTriSize / 4, 4);
+        _bvhNodesBuffer = new ComputeBuffer(totalNodeSize / 4, 4);
+        _bvhTrianglesBuffer = new ComputeBuffer(totalTriSize / 4, 4);
 
         List<int> nodeOffsetList = new();
         List<int> triOffsetList = new();
@@ -537,10 +565,12 @@ public class BVHScene
             int nodesSize = nodeSizeList[i];
             int trisSize = triSizeList[i];
 
+            //Debug.Log($"Uploading BVH Data for Mesh {i + 1}/{_meshes.Count} Offset:{nodeOffset:n0}-{(nodeOffset + nodesSize):n0}/{totalNodeSize:n0} TriOffset:{triOffset:n0}-{(triOffset + trisSize):n0}/{totalTriSize:n0}");
+
             if (TinyBVH.GetCWBVHData(bvhIndex, out IntPtr nodesPtr, out IntPtr trisPtr))
             {
-                Utilities.UploadFromPointer2(ref _bvhNodesBuffer2, nodesPtr, nodesSize, 4, totalNodeSize, nodeOffset);
-                Utilities.UploadFromPointer2(ref _bvhTrianglesBuffer2, trisPtr, trisSize, 4, totalTriSize, triOffset);
+                Utilities.UploadFromPointer(ref _bvhNodesBuffer, nodesPtr, nodesSize, 4, totalNodeSize, nodeOffset);
+                Utilities.UploadFromPointer(ref _bvhTrianglesBuffer, trisPtr, trisSize, 4, totalTriSize, triOffset);
             }
 
             nodeOffsetList.Add(nodeOffset);
@@ -548,16 +578,17 @@ public class BVHScene
 
             nodeOffset += nodesSize;
             triOffset += trisSize;
-
-            TinyBVH.DestroyBVH(bvhIndex);
         }
 
-        Vector4[] bounds = new Vector4[_meshes.Count * 2];
-        var meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+        _meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
 
-        int boundsIndex = 0;
-        List<BVHInstance> instances = new();
-        foreach (MeshRenderer renderer in meshRenderers)
+        _blasInstances = new BLASInstance[_meshRenderers.Length];
+        _instances = new BVHInstance[_meshRenderers.Length];
+
+        int instanceIndex = 0;
+        int totalInstancedTriangles = 0;
+
+        foreach (MeshRenderer renderer in _meshRenderers)
         {
             Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
             if (mesh == null || !_meshes.Contains(mesh))
@@ -565,182 +596,58 @@ public class BVHScene
 
             int meshIndex = _meshes.IndexOf(mesh);
 
-            Material material = renderer.material;
-            if (!_materials2.Contains(material))
-                _materials2.Add(material);
-
-            int materialIndex = _materials2.IndexOf(material);
-
-            Matrix4x4 transform = renderer.localToWorldMatrix;
-            Bounds aabb = renderer.bounds;
-
-            bounds[boundsIndex++].Set(aabb.min.x, aabb.min.y, aabb.min.z, 0.0f);
-            bounds[boundsIndex++].Set(aabb.max.x, aabb.max.y, aabb.max.z, 0.0f);
-
-            BVHInstance instance = new();
-            instance.transform = transform;
-            instance.materialIndex = materialIndex;
-            instance.bvhOffset = nodeOffsetList[meshIndex];
-            instance.triOffset = triOffsetList[meshIndex];
-            instances.Add(instance);
-
-            Debug.Log($"OBJECT {renderer.gameObject.name} MATERIAL {materialIndex} TRANSFORM {transform}");
-        }
-
-        NativeArray<Vector4> boundsPtr = new(bounds, Allocator.Persistent);
-
-        #if UNITY_EDITOR
-            NativeArray<Vector4> boundsTmpPtr = new(boundsPtr.Length, Allocator.Persistent);
-            boundsTmpPtr.CopyFrom(boundsPtr);
-            IntPtr boundsPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(boundsTmpPtr);
-        #else
-            IntPtr boundsPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(boundsPtr);
-        #endif
-
-        int tlasIndex = TinyBVH.BuildTLAS(boundsPointer, instances.Count);
-        Debug.Log($"TLAS Index: {tlasIndex}");
-
-        #if UNITY_EDITOR
-            boundsTmpPtr.Dispose();
-        #endif
-
-        boundsPtr.Dispose();
-
-        TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
-
-        Debug.Log($"Building BVH took: {bvhTime.TotalMilliseconds:n0}ms");
-
-        #if UNITY_EDITOR
-            persistentBuffer.Dispose();
-        #endif
-    }
-
-    public void ProcessMeshes()
-    {
-        _totalVertexCount = 0;
-        _totalTriangleCount = 0;
-
-        // Populate list of mesh renderers to trace against
-        var meshRenderers = UnityEngine.Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
-
-        // Gather info on the meshes we'll be using
-        foreach (MeshRenderer renderer in meshRenderers)
-        {
-            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
-            if (mesh == null)
-                continue;
-
-            _totalVertexCount += Utilities.GetTriangleCount(mesh) * 3;
-        }
-
-        if (_totalVertexCount == 0)
-        {
-            Debug.LogError("No meshes found to process.");
-            return;
-        }
-
-        // Allocate buffers
-        _vertexPositionBufferGPU = new ComputeBuffer(_totalVertexCount, kVertexPositionSize);
-        _vertexPositionBufferCPU = new NativeArray<Vector4>(_totalVertexCount * kVertexPositionSize, Allocator.Persistent);
-        _triangleAttributesBuffer = new ComputeBuffer(_totalVertexCount / 3, kTriangleAttributeSize);
-
-        _materials.Clear();
-
-        // Gather the data for each mesh to pass to tinybvh. This is done in a compute shader with async readback
-        // to avoid each mesh having to have read/write access.
-        foreach (MeshRenderer renderer in meshRenderers)
-        {
-            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
-            if (mesh == null)
-                continue;
-
-            Material material = renderer.material;
+            Material material = renderer.sharedMaterial;
             if (!_materials.Contains(material))
                 _materials.Add(material);
 
             int materialIndex = _materials.IndexOf(material);
 
-            Debug.Log($"Processing mesh: {renderer.gameObject.name}");
+            Matrix4x4 transform = renderer.localToWorldMatrix;
+            Matrix4x4 inverseTransform = renderer.worldToLocalMatrix;
 
-            GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
-            GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
+            int bvhIndex = bvhList[meshIndex];
 
-            int triangleCount = Utilities.GetTriangleCount(mesh);
+            _blasInstances[instanceIndex].transform = transform.transpose;
+            _blasInstances[instanceIndex].inverseTransform = inverseTransform.transpose;
+            _blasInstances[instanceIndex].blas = TinyBVH.GetBVHPtr(bvhIndex);
 
-            // Determine where in the Unity vertex buffer each vertex attribute is
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Position, out int positionOffset, out int vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Normal, out int normalOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.Tangent, out int tangentOffset, out vertexStride);
-            Utilities.FindVertexAttribute(mesh, VertexAttribute.TexCoord0, out int uvOffset, out vertexStride);
+            _instances[instanceIndex].materialIndex = materialIndex;
+            _instances[instanceIndex].bvhOffset = nodeOffsetList[meshIndex] / kBVHNodeSize;
+            _instances[instanceIndex].triOffset = triOffsetList[meshIndex] / kBVHTriSize;
+            _instances[instanceIndex].triAttributeOffset = _triangleAttributeOffsets[meshIndex] / kTriangleAttributeSize;
+            _instances[instanceIndex].transform = transform;
+            _instances[instanceIndex].inverseTransform = inverseTransform;
 
-            _meshProcessingShader.SetBuffer(0, "VertexBuffer", vertexBuffer);
-            if (indexBuffer != null)
-                _meshProcessingShader.SetBuffer(0, "IndexBuffer", indexBuffer);
-            _meshProcessingShader.SetBuffer(0, "VertexPositionBuffer", _vertexPositionBufferGPU);
-            _meshProcessingShader.SetBuffer(0, "TriangleAttributesBuffer", _triangleAttributesBuffer);
-            _meshProcessingShader.SetInt("VertexStride", vertexStride);
-            _meshProcessingShader.SetInt("PositionOffset", positionOffset);
-            _meshProcessingShader.SetInt("NormalOffset", normalOffset);
-            _meshProcessingShader.SetInt("TangentOffset", tangentOffset);
-            _meshProcessingShader.SetInt("UVOffset", uvOffset);
-            _meshProcessingShader.SetInt("TriangleCount", triangleCount);
-            _meshProcessingShader.SetInt("OutputTriangleStart", _totalTriangleCount);
-            _meshProcessingShader.SetInt("MaterialIndex", materialIndex);
-            _meshProcessingShader.SetMatrix("LocalToWorld", renderer.localToWorldMatrix);
+            instanceIndex++;
 
-            // Set keywords based on format/attributes of this mesh
-            _meshProcessingShader.SetKeyword(_has32BitIndicesKeyword, mesh.indexFormat == IndexFormat.UInt32);
-            _meshProcessingShader.SetKeyword(_hasNormalsKeyword, mesh.HasVertexAttribute(VertexAttribute.Normal));
-            _meshProcessingShader.SetKeyword(_hasUVsKeyword, mesh.HasVertexAttribute(VertexAttribute.TexCoord0));
-            _meshProcessingShader.SetKeyword(_hasTangentsKeyword, mesh.HasVertexAttribute(VertexAttribute.Tangent));
-            _meshProcessingShader.SetKeyword(_hasIndexBufferKeyword, indexBuffer != null);
-
-            _meshProcessingShader.Dispatch(0, Mathf.CeilToInt(triangleCount / 64.0f), 1, 1);
-
-            _totalTriangleCount += triangleCount;
-
-            vertexBuffer?.Release();
-            indexBuffer?.Release();
+            totalInstancedTriangles += _meshTriangleCount[meshIndex];
         }
 
-        Debug.Log($"Meshes processed. Total triangles: {_totalTriangleCount:n0}");
-
-        List<Texture> textures = new();
-
+        Debug.Log($"Total Materials: {_materials.Count} Buffer size: {_materials.Count * kMaterialSize * 4:n0} bytes");
         _materialsBuffer = new ComputeBuffer(_materials.Count, kMaterialSize * 4);
-
-        Debug.Log($"Total _materials: {_materials.Count}");
-
         UpdateMaterialData(true);
 
-        // Initiate async readback of vertex buffer to pass to tinybvh to build
-        _readbackStartTime = DateTime.UtcNow;
-        AsyncGPUReadback.RequestIntoNativeArray(ref _vertexPositionBufferCPU, _vertexPositionBufferGPU, OnCompleteReadback);
-    }
+        _instancesBuffer = new ComputeBuffer(_instances.Length, kBVHInstanceSize);
+        _instancesBuffer.SetData(_instances);
+        _tlasInstanceCount = _instances.Length;
 
-    unsafe void OnCompleteReadback(AsyncGPUReadbackRequest request)
-    {
-        if (request.hasError)
+        NativeArray<BLASInstance> blasInstancesPtr = new(_blasInstances, Allocator.Persistent);
+        IntPtr blasInstancesCPtr = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(blasInstancesPtr);
+
+        int tlasIndex = TinyBVH.BuildTLAS(blasInstancesCPtr, _tlasInstanceCount);
+        Debug.Log($"Total Instances: {_tlasInstanceCount} Instanced Triangles: {totalInstancedTriangles:n0}");
+
+        if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr))
         {
-            Debug.LogError("GPU readback error.");
-            return;
+            int tlasNodeSize = TinyBVH.GetTLASNodesSize(tlasIndex);
+            Debug.Log($"TLAS Nodes Size: {tlasNodeSize:n0}  Buffer Size: {tlasNodeSize:n0} bytes");
+            Utilities.UploadFromPointer(ref _tlasNodesBuffer, tlasNodesPtr, tlasNodeSize, 4);
         }
 
-        TimeSpan readbackTime = DateTime.UtcNow - _readbackStartTime;
-        Debug.Log($"GPU readback took: {readbackTime.TotalMilliseconds:n0}ms");
+        blasInstancesPtr.Dispose();
 
-        // In the editor if we exit play mode before the bvh is finished building the memory will be freed
-        // and TinyBVH will illegal access and crash everything. 
-        #if UNITY_EDITOR
-            NativeArray<Vector4> persistentBuffer = new(_vertexPositionBufferCPU.Length, Allocator.Persistent);
-            persistentBuffer.CopyFrom(_vertexPositionBufferCPU);
-            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(persistentBuffer);
-        #else
-            IntPtr dataPointer = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(_vertexPositionBufferCPU);
-        #endif
+        TinyBVH.DestroyTLAS(tlasIndex);
 
-        DateTime bvhStartTime = DateTime.UtcNow;
-        int bvhIndex = TinyBVH.BuildBVH(dataPointer, _totalTriangleCount);
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
 
         Debug.Log($"Building BVH took: {bvhTime.TotalMilliseconds:n0}ms");
@@ -748,23 +655,66 @@ public class BVHScene
         #if UNITY_EDITOR
             persistentBuffer.Dispose();
         #endif
+    }
 
-        // Get the sizes of the arrays
-        int nodesSize = TinyBVH.GetCWBVHNodesSize(bvhIndex);
-        int trisSize = TinyBVH.GetCWBVHTrisSize(bvhIndex);
+    public unsafe bool UpdateTLAS()
+    {
+        if (_meshRenderers == null)
+            return false;
 
-        if (TinyBVH.GetCWBVHData(bvhIndex, out IntPtr nodesPtr, out IntPtr trisPtr))
+        bool isDirty = false;
+        int instanceIndex = 0;
+        foreach (MeshRenderer renderer in _meshRenderers)
         {
-            Utilities.UploadFromPointer(ref _bvhNodesBuffer, nodesPtr, nodesSize, kBVHNodeSize);
-            Utilities.UploadFromPointer(ref _bvhTrianglesBuffer, trisPtr, trisSize, kBVHTriSize);
-            Debug.Log("BVH Uploaded");
-        } 
-        else
-        {
-            Debug.LogError("Failed to fetch updated BVH data.");
+            Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+            if (mesh == null || !_meshes.Contains(mesh))
+                continue;
+
+            int meshIndex = _meshes.IndexOf(mesh);
+
+            Matrix4x4 transform = renderer.localToWorldMatrix;
+            Matrix4x4 inverseTransform = renderer.worldToLocalMatrix;
+
+            if (transform == _instances[instanceIndex].transform && inverseTransform == _instances[instanceIndex].inverseTransform)
+            {
+                instanceIndex++;
+                continue;
+            }
+
+            isDirty = true;
+
+            Matrix4x4 transformTransposed = transform.transpose;
+            Matrix4x4 inverseTransformTransposed = inverseTransform.transpose;
+
+            _blasInstances[instanceIndex].transform = transformTransposed;
+            _blasInstances[instanceIndex].inverseTransform = inverseTransformTransposed;
+
+            _instances[instanceIndex].transform = transform;
+            _instances[instanceIndex].inverseTransform = inverseTransform;
+
+            instanceIndex++;
         }
 
-        // We're all done with this BVH data
-        TinyBVH.DestroyBVH(bvhIndex);
+        if (!isDirty)
+            return false;
+
+        _instancesBuffer.SetData(_instances);
+
+        NativeArray<BLASInstance> blasInstancesPtr = new(_blasInstances, Allocator.Persistent);
+        IntPtr blasInstancesCPtr = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(blasInstancesPtr);
+
+        int tlasIndex = TinyBVH.BuildTLAS(blasInstancesCPtr, _tlasInstanceCount);
+
+        if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr))
+        {
+            int tlasNodeSize = TinyBVH.GetTLASNodesSize(tlasIndex);
+            Utilities.UploadFromPointer(ref _tlasNodesBuffer, tlasNodesPtr, tlasNodeSize, 4);
+        }
+
+        blasInstancesPtr.Dispose();
+
+        TinyBVH.DestroyTLAS(tlasIndex);
+
+        return true;
     }
 }

@@ -22,6 +22,9 @@ public class TinyBVH
     public static extern bool IsBVHReady(int index);
 
     [DllImport(libraryName)]
+    public static extern IntPtr GetBVHPtr(int index);
+
+    [DllImport(libraryName)]
     public static extern int GetCWBVHNodesSize(int index);
 
     [DllImport(libraryName)]

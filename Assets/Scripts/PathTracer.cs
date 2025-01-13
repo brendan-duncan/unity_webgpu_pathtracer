@@ -82,6 +82,9 @@ public class PathTracer : MonoBehaviour
     const int RayHitStructSize = 20;
     const int LightStructSize = 16;
 
+    Matrix4x4 _cameraToWorldMatrix;
+    Matrix4x4 _cameraProjectionMatrix;
+
     void Start()
     {
         _camera = GetComponent<Camera>();
@@ -212,6 +215,9 @@ public class PathTracer : MonoBehaviour
 
     void Update()
     {
+        if (_bvhScene.UpdateTLAS())
+            Reset();
+
         if (_lastEnvironmentMapRotation != environmentMapRotation ||
             _lastAperture != aperture ||
             _lastFocalLength != focalLength)
@@ -221,7 +227,10 @@ public class PathTracer : MonoBehaviour
             _lastFocalLength = focalLength;
             Reset();
         }
-        UpdateLights();
+
+        _pathTracerShader.DisableKeyword(_hasLightsKeyword);
+        //UpdateLights();
+
         _bvhScene.Update();
         _pathTracerShader.SetKeyword(_hasTexturesKeyword, _bvhScene.HasTextures());
     }
@@ -382,14 +391,21 @@ public class PathTracer : MonoBehaviour
                     rngStateData[i] = (uint)UnityEngine.Random.Range(0, uint.MaxValue);
                 _rngStateBuffer.SetData(rngStateData);
             }
-        
+
+            if (_cameraToWorldMatrix != _camera.cameraToWorldMatrix || _cameraProjectionMatrix != _camera.projectionMatrix)
+            {
+                _cameraToWorldMatrix = _camera.cameraToWorldMatrix;
+                _cameraProjectionMatrix = _camera.projectionMatrix;
+                Reset();
+            }
+
             _cmd.BeginSample("Path Tracer");
             {
                 PrepareShader(_cmd, _pathTracerShader, 0);
                 _bvhScene.PrepareShader(_cmd, _pathTracerShader, 0);
-                _cmd.SetComputeMatrixParam(_pathTracerShader, "CamInvProj", _camera.projectionMatrix.inverse);
-                _cmd.SetComputeMatrixParam(_pathTracerShader, "CamToWorld", _camera.cameraToWorldMatrix);
-    
+                _cmd.SetComputeMatrixParam(_pathTracerShader, "CamInvProj", _cameraProjectionMatrix.inverse);
+                _cmd.SetComputeMatrixParam(_pathTracerShader, "CamToWorld", _cameraToWorldMatrix);
+
                 _cmd.DispatchCompute(_pathTracerShader, 0, dispatchX, dispatchY, 1);
             }
             _cmd.EndSample("Path Tracer");

@@ -163,7 +163,7 @@ PlayerSettings:
   androidMaxAspectRatio: 2.1
   androidMinAspectRatio: 1
   applicationIdentifier:
-    Standalone: com.DefaultCompany.unity-tinybvh
+    Standalone: com.Brendan-Duncan.Unity-WebGPU-PathTracer
   buildNumber:
     Standalone: 0
     VisionOS: 0

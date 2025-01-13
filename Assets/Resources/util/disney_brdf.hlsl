@@ -86,7 +86,7 @@ DisneyMaterial GetDisneyMaterial(in Ray ray, inout RayHit hit)
         hit.normal = normalize(hit.tangent * normalMap.x + bitangent * normalMap.y + hit.normal * normalMap.z);
         hit.ffnormal = dot(origNormal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
     }*/
-    
+
     if (dot(ray.direction, hit.normal) < 0.0)
         hit.eta = 1.0 / disneyMaterial.ior;
     else
@@ -98,8 +98,11 @@ DisneyMaterial GetDisneyMaterial(in Ray ray, inout RayHit hit)
 void TintColors(in DisneyMaterial mat, float eta, out float F0, out float3 Csheen, out float3 Cspec0)
 {
     float lum = Luminance(mat.baseColor);
-    float3 ctint = lum > 0.0f ? mat.baseColor / lum : 1.0f;
-
+    float3 ctint;
+    if (lum > 0.0f)
+        ctint = mat.baseColor / lum;
+    else
+        ctint = 1.0f;
     F0 = (1.0f - eta) / (1.0f + eta);
     F0 *= F0;
     

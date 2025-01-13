@@ -127,6 +127,7 @@ float4 BasicSky(float3 r, float intensity)
     return float4(color * intensity, pdf);
 }
 
+/*
 // From https://github.com/Nelarius/rayfinder
 struct SkyState
 {
@@ -188,7 +189,7 @@ float SkyRadiance(float theta, float gamma, uint channel)  {
     float radianceDist = radianceLhs * radianceRhs;
 
     return (r * radianceDist);
-}
+}*/
 
 
 float4 SampleSkyRadiance(float3 direction, int rayDepth)
@@ -208,7 +209,7 @@ float4 SampleSkyRadiance(float3 direction, int rayDepth)
             intensity = EnvironmentIntensity;
         radiance = BasicSky(direction, intensity);
     }
-    else if (EnvironmentMode == SKY_MODE_PHYSICAL)
+    /*else if (EnvironmentMode == SKY_MODE_PHYSICAL)
     {
         float3 sunDirection = SkyStateBuffer[0].sunDirection;
 
@@ -227,7 +228,7 @@ float4 SampleSkyRadiance(float3 direction, int rayDepth)
             SkyRadiance(theta, gamma, 2) * scale,
             pdf
         );
-    }
+    }*/
 
     return radiance;
 }

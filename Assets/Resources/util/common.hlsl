@@ -62,7 +62,7 @@ float4 ExtractBytes(float value)
     return channels;
 }
 
-float Select(float f, float t, bool c)
+float select(float f, float t, bool c)
 {
     if (c)
         return t;
@@ -70,7 +70,7 @@ float Select(float f, float t, bool c)
         return f;
 }
 
-float3 Select(float3 f, float3 t, bool c)
+float3 select(float3 f, float3 t, bool c)
 {
     if (c)
         return t;
@@ -78,7 +78,7 @@ float3 Select(float3 f, float3 t, bool c)
         return f;
 }
 
-float4 Select(float4 f, float4 t, bool c)
+float4 select(float4 f, float4 t, bool c)
 {
     if (c)
         return t;
@@ -91,9 +91,24 @@ bool isless(float4 a, float4 b)
     return all(a < b);
 }
 
+float3 min3(float3 a, float3 b)
+{
+    return float3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z));
+}
+
+float3 max3(float3 a, float3 b)
+{
+    return float3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z));
+}
+
 bool isgreater(float4 a, float4 b)
 {
     return all(a > b);
+}
+
+uint4 asuint4(float4 v)
+{
+    return uint4(asuint(v.x), asuint(v.y), asuint(v.z), asuint(v.w));
 }
 
 // Heaviside step function
@@ -163,32 +178,42 @@ void ConcentricSampleDisk(float u1, float u2, out float dx, out float dy)
 /// Calculate an orthonormal basis from a given z direction.
 float3x3 GetONB(float3 z)
 {
-    z = normalize(z);
-#if ONB_METHOD == 0
-    // https://www.jcgt.org/published/0006/01/01/paper-lowres.pdf
-    float s = Select(-1.0f, 1.0f, z.z >= 0.0f);
-    float a = -1.0f / (s + z.z);
-    float b = z.x * z.y * a;
-    float3 x = float3(1.0f + s * z.x * z.x * a, s * b, -s * z.x);
-    float3 y = float3(b, s + z.y * z.y * a, -z.y);
-#elif ONB_METHOD == 1
-    //MBR frizvald but attempts to deal with z == -1
-    // From https://www.shadertoy.com/view/tlVczh
-    float k = 1.0f / max(1.0f + z.z, 0.00001);
-    // k = min(k, 99995.0);
-    float a =  z.y * k;
-    float b =  z.y * a;
-    float c = -z.x * a;
-    
-    float3 x = float3(z.z + b, c, -z.x);
-    float3 y = float3(c, 1.0f - b, -z.y);
-#else
-    float3 x = Select(float3(1.0, 0.0, 0.0), float3(0.0, 1.0, 0.0), abs(z.x) > 0.5f);
-	x -= z * dot(x, z);
-	x = normalize(x);
-	float3 y = cross(z, x);
-#endif
-    return float3x3(x, y, z);
+    float lenSq = dot(z, z);
+    if (lenSq == 0.0f)
+    {
+        return float3x3(1.0f, 0.0f, 0.0f,
+                        0.0f, 1.0f, 0.0f,
+                        0.0f, 0.0f, 1.0f);
+    }
+    else
+    {
+        z = normalize(z);
+    #if ONB_METHOD == 0
+        // https://www.jcgt.org/published/0006/01/01/paper-lowres.pdf
+        float s = select(-1.0f, 1.0f, z.z >= 0.0f);
+        float a = -1.0f / (s + z.z);
+        float b = z.x * z.y * a;
+        float3 x = float3(1.0f + s * z.x * z.x * a, s * b, -s * z.x);
+        float3 y = float3(b, s + z.y * z.y * a, -z.y);
+    #elif ONB_METHOD == 1
+        //MBR frizvald but attempts to deal with z == -1
+        // From https://www.shadertoy.com/view/tlVczh
+        float k = 1.0f / max(1.0f + z.z, 0.00001);
+        // k = min(k, 99995.0);
+        float a =  z.y * k;
+        float b =  z.y * a;
+        float c = -z.x * a;
+        
+        float3 x = float3(z.z + b, c, -z.x);
+        float3 y = float3(c, 1.0f - b, -z.y);
+    #else
+        float3 x = select(float3(1.0, 0.0, 0.0), float3(0.0, 1.0, 0.0), abs(z.x) > 0.5f);
+        x -= z * dot(x, z);
+        x = normalize(x);
+        float3 y = cross(z, x);
+    #endif
+        return float3x3(x, y, z);
+    }
 }
 
 float3 ToWorld(float3x3 basis, float3 local)
