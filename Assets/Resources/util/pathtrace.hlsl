@@ -38,9 +38,10 @@ float3 PathTrace(Ray ray, inout uint rngState)
                 misWeight = PowerHeuristic(scatterSample.pdf, skyColorPDf.w);
             if (misWeight > 0)
                 radiance += misWeight * skyColorPDf.rgb * throughput;
-            //radiance = float3(0.0f, 0.0f, 1.0f);
             break;
         }
+
+        //return hit.tangent;
 
         DisneyMaterial material = GetDisneyMaterial(ray, hit);
 

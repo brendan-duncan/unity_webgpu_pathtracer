@@ -62,6 +62,7 @@ public class BVHScene
     const int kTextureOffset = 24;
 
     List<Mesh> _meshes = new();
+    List<MeshRenderer> _renderers = new();
     List<int> _meshStartIndices = new();
     List<int> _meshTriangleCount = new();
     List<int> _triangleAttributeOffsets = new();
@@ -386,6 +387,7 @@ public class BVHScene
         _totalTriangleCount = 0;
 
         _meshes.Clear();
+        _renderers.Clear();
         _meshStartIndices.Clear();
         _meshTriangleCount.Clear();
         _materials.Clear();
@@ -404,6 +406,7 @@ public class BVHScene
 
             int triangleCount = Utilities.GetTriangleCount(mesh);
 
+            _renderers.Add(renderer);
             _meshes.Add(mesh);
             _meshStartIndices.Add(_totalTriangleCount);
             _meshTriangleCount.Add(triangleCount);
@@ -436,7 +439,7 @@ public class BVHScene
         {
             int triangleCount = Utilities.GetTriangleCount(mesh);
 
-            Debug.Log($"Processing Mesh {meshIndex + 1}/{_meshes.Count} Triangles: {triangleCount:n0}");
+            Debug.Log($"Processing Mesh {meshIndex + 1}/{_meshes.Count} Triangles: {triangleCount:n0} Offset:{vertexOffset*kVertexPositionSize}");
             meshIndex++;
 
             GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
@@ -493,6 +496,8 @@ public class BVHScene
         AsyncGPUReadback.RequestIntoNativeArray(ref _vertexPositionBufferCPU, _vertexPositionBufferGPU, OnCompleteReadback);
     }
 
+    // !!!! Crash with sponza_380 when there is another object
+
     BLASInstance[] _blasInstances;
     BVHInstance[] _instances;
     MeshRenderer[] _meshRenderers;
@@ -532,7 +537,7 @@ public class BVHScene
             int meshTriangleCount = _meshTriangleCount[i];
             int dataPointerOffset = _vertexPositionOffsets[i];
 
-            Debug.Log($"Building BVH for Mesh {i + 1}/{_meshes.Count} Triangles: {meshTriangleCount:n0} Offset: {dataPointerOffset:n0}");
+            Debug.Log($"Building BVH for Mesh {i + 1}/{_meshes.Count} {_renderers[i].gameObject.name} Triangles: {meshTriangleCount:n0} Offset: {dataPointerOffset:n0} / {_vertexPositionBufferCPU.Length:n0}");
 
             IntPtr meshPtr = IntPtr.Add(dataPointer, dataPointerOffset);
 

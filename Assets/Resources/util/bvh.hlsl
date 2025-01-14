@@ -9,10 +9,10 @@
 
 struct BVHInstance
 {
-	int materialIndex;
-	int bvhOffset;
-	int triOffset;
-	int triAttributeOffset;
+    int materialIndex;
+    int bvhOffset;
+    int triOffset;
+    int triAttributeOffset;
     float4x4 localToWorld;
     float4x4 worldToLocal;
 };
@@ -258,15 +258,9 @@ RayHit RayIntersectBvh(const Ray ray, in BVHInstance instance, bool isShadowRay)
         if (nodeGroup.y <= 0x00FFFFFF)
         {
             if (stackPtr > 0) 
-            { 
-                // Pop the stack
                 nodeGroup = stack[--stackPtr];
-            }
             else
-            {
-                // Traversal complete, exit loop
                 break;
-            }
         }
     }
 
@@ -317,13 +311,6 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
     uint stackPtr = 0;
     while (true)
     {
-        if (cost++ > 1000) // protect against infinite loops
-        {
-            //hitFound = true;
-            //hit.distance = 1.0f;
-            break;
-        }
-
         // fetch the node
         const uint blasCount = asuint(TLASNodes[node].rminBlasCount.w);
         if (blasCount > 0)
@@ -333,19 +320,19 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
             // process leaf node
             for (uint i = 0; i < blasCount; i++)
             {
-				const BVHInstance instance = TLASInstances[firstBlas + i];
-				const float4x4 worldToLocal = instance.worldToLocal;
+                const BVHInstance instance = TLASInstances[firstBlas + i];
+                const float4x4 worldToLocal = instance.worldToLocal;
 
                 const float3 lO = mul(worldToLocal, float4(O, 1.0f)).xyz;
                 const float3 lD = mul(worldToLocal, float4(ray.direction, 0.0f)).xyz;
 
-				Ray rayLocal = {lO, lD};
+                Ray rayLocal = {lO, lD};
                 RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
-				/*if (blasHit.distance < hit.distance)
+                if (blasHit.distance < hit.distance)
                 {
-					hit = blasHit;
+                    hit = blasHit;
                     hitFound = true;
-                }*/
+                }
             }
 
             if (stackPtr == 0)
@@ -411,7 +398,7 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
     if (!hitFound)
         hit.distance = FarPlane;
 
-	return hit;
+    return hit;
 }
 
 RayHit RayIntersect(in Ray ray)
