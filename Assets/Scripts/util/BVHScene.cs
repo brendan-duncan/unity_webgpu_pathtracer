@@ -1,4 +1,4 @@
-//#define USE_TLAS
+#define USE_TLAS
 
 using System;
 using System.Collections.Generic;
@@ -8,7 +8,9 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Experimental.Rendering;
 
-struct BVHInstance
+#if USE_TLAS
+// Instance data passed to the GPU for rendering.
+struct GPUInstance
 {
     public int materialIndex; 
     public int bvhOffset;
@@ -18,12 +20,17 @@ struct BVHInstance
     public Matrix4x4 inverseTransform;
 };
 
+// Instance data passed to TinyBVH for building the TLAS.
 struct BLASInstance
 {
     public Matrix4x4 transform;
     public Matrix4x4 inverseTransform;
-    public IntPtr blas;
+    public Vector3 aabbMin;
+    public int blasIndex;
+    public Vector3 aabbMax;
+    public int padding;
 };
+#endif
 
 public class BVHScene
 {
@@ -56,27 +63,32 @@ public class BVHScene
     // Struct sizes in bytes
     const int kVertexPositionSize = 16;
     const int kTriangleAttributeSize = 100;
-    const int kBVHInstanceSize = 144;
+    const int kGPUInstanceSize = 144;
     const int kBVHNodeSize = 80;
     const int kBVHTriSize = 16;
     // Number of float values in material.hlsl
     const int kMaterialSize = 32;
     const int kTextureOffset = 24;
 
+    List<MeshRenderer> _sceneMeshRenderers = new();
     List<Mesh> _meshes = new();
+    // List of MeshRenderers for each Mesh, for debugging purposes.
     List<MeshRenderer> _meshRenderers = new();
     List<int> _meshStartIndices = new();
     List<int> _meshTriangleCount = new();
     List<int> _triangleAttributeOffsets = new();
     List<int> _vertexPositionOffsets = new();
 
-    BLASInstance[] _blasInstances;
-    BVHInstance[] _bvhInstances;
-
 #if USE_TLAS
-    int _tlasInstanceCount = 0;
+    // List of instance data passed to TinyBVH. This is kept persistent so we can update transforms
+    // and rebuild the TLAS as necessary.
+    BLASInstance[] _blasInstances;
+    // List of instance data passed to the GPU for rendering/
+    GPUInstance[] _gpuInstances;
+
+    int _gpuInstanceCount = 0;
     ComputeBuffer _tlasNodesBuffer;
-    ComputeBuffer _instancesBuffer;
+    ComputeBuffer _gpuInstancesBuffer;
 #endif
 
     public void Start()
@@ -107,7 +119,7 @@ public class BVHScene
 
 #if USE_TLAS
         _tlasNodesBuffer?.Release();
-        _instancesBuffer?.Release();
+        _gpuInstancesBuffer?.Release();
 #endif
     }
 
@@ -142,8 +154,8 @@ public class BVHScene
         cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", _materialsBuffer);
 #if USE_TLAS
         cmd.SetComputeBufferParam(shader, kernelIndex, "TLASNodes", _tlasNodesBuffer);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "TLASInstances", _instancesBuffer);
-        cmd.SetComputeIntParam(shader, "TLASInstanceCount", _tlasInstanceCount);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "TLASInstances", _gpuInstancesBuffer);
+        cmd.SetComputeIntParam(shader, "TLASInstanceCount", _gpuInstanceCount);
 #endif
 
         if (_textureDataBuffer != null)
@@ -408,6 +420,7 @@ public class BVHScene
 
         _meshes.Clear();
         _meshRenderers.Clear();
+        _sceneMeshRenderers.Clear();
         _meshStartIndices.Clear();
         _meshTriangleCount.Clear();
         _materials.Clear();
@@ -421,15 +434,18 @@ public class BVHScene
         foreach (MeshRenderer renderer in meshRenderers)
         {
             Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+            if (mesh == null)
+                continue;
+
+            _sceneMeshRenderers.Add(renderer);
 #if USE_TLAS
-            if (mesh == null || _meshes.Contains(mesh))
+            if (_meshes.Contains(mesh))
                 continue;
 #endif
-
             int triangleCount = Utilities.GetTriangleCount(mesh);
 
-            _meshRenderers.Add(renderer);
             _meshes.Add(mesh);
+            _meshRenderers.Add(renderer);
             _meshStartIndices.Add(_totalTriangleCount);
             _meshTriangleCount.Add(triangleCount);
 
@@ -450,23 +466,26 @@ public class BVHScene
         _vertexPositionBufferCPU = new NativeArray<Vector4>(_totalVertexCount * kVertexPositionSize, Allocator.Persistent);
         _triangleAttributesBuffer = new ComputeBuffer(_totalTriangleCount, kTriangleAttributeSize);
 
-        int meshIndex = 0;
-
         int vertexOffset = 0;
         int triangleOffset = 0;
 
         // Gather the data for each mesh to pass to TinyBVH. This is done in a compute shader with async readback
         // to avoid each mesh having to have read/write access.
-        foreach (Mesh mesh in _meshes)
+        for (int meshIndex = 0; meshIndex < _meshes.Count; ++meshIndex)
         {
-            MeshRenderer renderer = _meshRenderers[meshIndex];
+            Mesh mesh = _meshes[meshIndex];
             int triangleCount = Utilities.GetTriangleCount(mesh);
 
+#if USE_TLAS
+            int materialIndex = 0; // materialIndex is stored in GPUInstance
+#else
+            MeshRenderer renderer = _meshRenderers[meshIndex];
             Material material = renderer.sharedMaterial;
             if (!_materials.Contains(material))
                 _materials.Add(material);
 
             int materialIndex = _materials.IndexOf(material);
+#endif
 
             Debug.Log($"Processing Mesh {meshIndex + 1}/{_meshes.Count} Triangles: {triangleCount:n0} Material: {materialIndex}");
 
@@ -516,8 +535,6 @@ public class BVHScene
 
             triangleOffset += triangleCount;
             vertexOffset += triangleCount * 3;
-
-            meshIndex++;
         }
 
         Debug.Log($"Meshes processed.");
@@ -563,7 +580,8 @@ public class BVHScene
             int meshTriangleCount = _meshTriangleCount[i];
             int dataPointerOffset = _vertexPositionOffsets[i];
 
-            Debug.Log($"Building BVH for Mesh {i + 1}/{_meshes.Count} {_meshRenderers[i].gameObject.name} Triangles: {meshTriangleCount:n0} Offset: {dataPointerOffset:n0} / {_vertexPositionBufferCPU.Length:n0}");
+            MeshRenderer renderer = _meshRenderers[i];
+            Debug.Log($"Building BVH for Mesh {i + 1}/{_meshes.Count} {renderer.gameObject.name} Triangles: {meshTriangleCount:n0} Offset: {dataPointerOffset:n0} / {_vertexPositionBufferCPU.Length:n0}");
 
             IntPtr meshPtr = IntPtr.Add(dataPointer, dataPointerOffset);
 
@@ -623,19 +641,16 @@ public class BVHScene
             triOffset += trisSize;
         }
 
-        _bvhInstances = new BVHInstance[_meshRenderers.Count];
-        _blasInstances = new BLASInstance[_meshRenderers.Count];
+#if USE_TLAS
+        _gpuInstances = new GPUInstance[_sceneMeshRenderers.Count];
+        _blasInstances = new BLASInstance[_sceneMeshRenderers.Count];
 
-        int instanceIndex = 0;
         int totalInstancedTriangles = 0;
 
-#if USE_TLAS
-        foreach (MeshRenderer renderer in _meshRenderers)
+        for (int instanceIndex = 0; instanceIndex < _sceneMeshRenderers.Count; ++instanceIndex)
         {
+            MeshRenderer renderer = _sceneMeshRenderers[instanceIndex];
             Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
-            if (mesh == null || !_meshes.Contains(mesh))
-                continue;
-
             int meshIndex = _meshes.IndexOf(mesh);
 
             Material material = renderer.sharedMaterial;
@@ -646,19 +661,21 @@ public class BVHScene
 
             Matrix4x4 transform = renderer.localToWorldMatrix;
             Matrix4x4 inverseTransform = renderer.worldToLocalMatrix;
-
+            Bounds bounds = renderer.bounds;
 
             int bvhIndex = bvhList[meshIndex];
-            _blasInstances[instanceIndex].transform = transform;//.transpose;
-            _blasInstances[instanceIndex].inverseTransform = inverseTransform;//.transpose;
-            _blasInstances[instanceIndex].blas = TinyBVH.GetBVHPtr(bvhIndex);
+            _blasInstances[instanceIndex].transform = transform;
+            _blasInstances[instanceIndex].inverseTransform = inverseTransform;
+            _blasInstances[instanceIndex].aabbMin = bounds.min;
+            _blasInstances[instanceIndex].blasIndex = bvhIndex;
+            _blasInstances[instanceIndex].aabbMax = bounds.max;
 
-            _bvhInstances[instanceIndex].materialIndex = materialIndex;
-            _bvhInstances[instanceIndex].bvhOffset = nodeOffsetList[meshIndex] / kBVHNodeSize;
-            _bvhInstances[instanceIndex].triOffset = triOffsetList[meshIndex] / kBVHTriSize;
-            _bvhInstances[instanceIndex].triAttributeOffset = _triangleAttributeOffsets[meshIndex] / kTriangleAttributeSize;
-            _bvhInstances[instanceIndex].transform = transform;
-            _bvhInstances[instanceIndex].inverseTransform = inverseTransform;
+            _gpuInstances[instanceIndex].materialIndex = materialIndex;
+            _gpuInstances[instanceIndex].bvhOffset = nodeOffsetList[meshIndex] / kBVHNodeSize;
+            _gpuInstances[instanceIndex].triOffset = triOffsetList[meshIndex] / kBVHTriSize;
+            _gpuInstances[instanceIndex].triAttributeOffset = _triangleAttributeOffsets[meshIndex] / kTriangleAttributeSize;
+            _gpuInstances[instanceIndex].transform = transform;
+            _gpuInstances[instanceIndex].inverseTransform = inverseTransform;
 
             totalInstancedTriangles += _meshTriangleCount[meshIndex];
         }
@@ -669,15 +686,15 @@ public class BVHScene
         UpdateMaterialData(true);
 
 #if USE_TLAS
-        _instancesBuffer = new ComputeBuffer(_bvhInstances.Length, kBVHInstanceSize);
-        _instancesBuffer.SetData(_bvhInstances);
-        _tlasInstanceCount = _bvhInstances.Length;
+        _gpuInstancesBuffer = new ComputeBuffer(_gpuInstances.Length, kGPUInstanceSize);
+        _gpuInstancesBuffer.SetData(_gpuInstances);
+        _gpuInstanceCount = _gpuInstances.Length;
 
         NativeArray<BLASInstance> blasInstancesPtr = new(_blasInstances, Allocator.Persistent);
         IntPtr blasInstancesCPtr = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(blasInstancesPtr);
 
-        int tlasIndex = TinyBVH.BuildTLAS(blasInstancesCPtr, _tlasInstanceCount);
-        Debug.Log($"Total Instances: {_tlasInstanceCount} Instanced Triangles: {totalInstancedTriangles:n0}");
+        int tlasIndex = TinyBVH.BuildTLAS(blasInstancesCPtr, _blasInstances.Length);
+        Debug.Log($"Total Instances: {_blasInstances.Length} Instanced Triangles: {totalInstancedTriangles:n0}");
 
         if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr))
         {
@@ -688,7 +705,13 @@ public class BVHScene
 
         blasInstancesPtr.Dispose();
 
+        // We will rebuild a TLAS if the scene changes, so we don't need to keep the CPU memory of the current
+        // TLAS, as the data has already been uploaded to the GPU.
         TinyBVH.DestroyTLAS(tlasIndex);
+
+        // BVH data is now on the GPU, we can free the CPU memory
+        for (int i = 0; i < bvhList.Count; ++i)
+            TinyBVH.DestroyBVH(bvhList[i]);
 #endif
 
         TimeSpan bvhTime = DateTime.UtcNow - bvhStartTime;
@@ -705,12 +728,12 @@ public class BVHScene
 #if !USE_TLAS
         return false;
 #else
-        if (_meshRenderers == null || _bvhInstances == null)
+        if (_sceneMeshRenderers == null || _gpuInstances == null)
             return false;
 
         bool isDirty = false;
         int instanceIndex = 0;
-        foreach (MeshRenderer renderer in _meshRenderers)
+        foreach (MeshRenderer renderer in _sceneMeshRenderers)
         {
             Mesh mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
             if (mesh == null || !_meshes.Contains(mesh))
@@ -720,24 +743,28 @@ public class BVHScene
 
             Matrix4x4 transform = renderer.localToWorldMatrix;
 
-            if (transform == _bvhInstances[instanceIndex].transform)
+            // Check if the object's transform has changed since the last update.
+            // If it hasn't, we don't need to update the TLAS.
+            if (transform == _gpuInstances[instanceIndex].transform)
             {
                 instanceIndex++;
                 continue;
             }
 
-            Matrix4x4 inverseTransform = renderer.worldToLocalMatrix;
-
+            // A TLAS instance has been updated, we'll need to rebuild the TLAS structure.
             isDirty = true;
 
-            Matrix4x4 transformTransposed = transform.transpose;
-            Matrix4x4 inverseTransformTransposed = inverseTransform.transpose;
+            Matrix4x4 inverseTransform = renderer.worldToLocalMatrix;
 
-            _blasInstances[instanceIndex].transform = transformTransposed;
-            _blasInstances[instanceIndex].inverseTransform = inverseTransformTransposed;
+            Bounds bounds = renderer.bounds;
 
-            _bvhInstances[instanceIndex].transform = transform;
-            _bvhInstances[instanceIndex].inverseTransform = inverseTransform;
+            _blasInstances[instanceIndex].transform = transform;
+            _blasInstances[instanceIndex].inverseTransform = inverseTransform;
+            _blasInstances[instanceIndex].aabbMin = bounds.min;
+            _blasInstances[instanceIndex].aabbMax = bounds.max;
+
+            _gpuInstances[instanceIndex].transform = transform;
+            _gpuInstances[instanceIndex].inverseTransform = inverseTransform;
 
             instanceIndex++;
         }
@@ -745,12 +772,12 @@ public class BVHScene
         if (!isDirty)
             return false;
 
-        _instancesBuffer.SetData(_bvhInstances);
+        _gpuInstancesBuffer.SetData(_gpuInstances);
 
         NativeArray<BLASInstance> blasInstancesPtr = new(_blasInstances, Allocator.Persistent);
         IntPtr blasInstancesCPtr = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(blasInstancesPtr);
 
-        int tlasIndex = TinyBVH.BuildTLAS(blasInstancesCPtr, _tlasInstanceCount);
+        int tlasIndex = TinyBVH.BuildTLAS(blasInstancesCPtr, _gpuInstanceCount);
 
         if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr))
         {

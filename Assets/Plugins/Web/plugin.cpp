@@ -151,32 +151,25 @@ extern "C" int BuildTLAS(tinybvh::BLASInstance* instances, int instanceCount)
     for (int i = 0; i < instanceCount; ++i)
     {
         // We store the CWBVH but we need to access the BVH for building the TLAS.
-        tinybvh::BVH8_CWBVH* cwbvh = (tinybvh::BVH8_CWBVH*)instances[i].blas;
-        tinybvh::BVH* bvh = &cwbvh->bvh8.bvh;
-        instances[i].blas = bvh;
+        //tinybvh::BVH8_CWBVH* cwbvh = (tinybvh::BVH8_CWBVH*)instances[i].blas;
+        //tinybvh::BVH* bvh = &cwbvh->bvh8.bvh;
+        //instances[i].blas = bvh;
 
-        printf("BLAS Instance %d blas:%p transform:\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g x %g %g %g\n--------\n", i, instances[i].blas,
+        printf("BLAS Instance %d blas:%d transform:\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g x %g %g %g\n--------\n", i, instances[i].blasIdx,
             instances[i].transform[0], instances[i].transform[1], instances[i].transform[2], instances[i].transform[3],
             instances[i].transform[4], instances[i].transform[5], instances[i].transform[6], instances[i].transform[7],
             instances[i].transform[8], instances[i].transform[9], instances[i].transform[10], instances[i].transform[11],
             instances[i].transform[12], instances[i].transform[13], instances[i].transform[14], instances[i].transform[15],
-            instances[i].blas->bvhNode[0].aabbMin.x, instances[i].blas->bvhNode[0].aabbMin.y, instances[i].blas->bvhNode[0].aabbMin.z,
-            instances[i].blas->bvhNode[0].aabbMax.x, instances[i].blas->bvhNode[0].aabbMax.y, instances[i].blas->bvhNode[0].aabbMax.z);
+            instances[i].aabbMin.x, instances[i].aabbMin.y, instances[i].aabbMin.z,
+            instances[i].aabbMax.x, instances[i].aabbMax.y, instances[i].aabbMax.z);
     }
-
-    //tinybvh::BVH tlas;
-    //tlas.Build(instances, instanceCount);
-
-    //tinybvh::BVH::BVHNode* node = &tlas.bvhNode[0];
-    //WalkBVHTree(tlas, node, 0);
-    //printf("--------------------\n");
 
     tinybvh::BVH_GPU* tlasGPU = new tinybvh::BVH_GPU();
     // Use the BVH owned by the BVH_GPU so we don't need to keep the seperate BVH around.
-    tlasGPU->bvh.Build(instances, instanceCount);
+    tlasGPU->bvh.Build(instances, instanceCount, nullptr, 0);
     tlasGPU->ConvertFrom(tlasGPU->bvh);
-    WalkBVHTree(*tlasGPU, &tlasGPU->bvhNode[0], 0);
-    printf("-------------------- TLAS Node Data:\n");
+    //WalkBVHTree(*tlasGPU, &tlasGPU->bvhNode[0], 0);
+    /*printf("-------------------- TLAS Node Data:\n");
     for (unsigned int i = 0; i < tlasGPU->usedNodes; ++i)
     {
         printf("%g %g %g %g\n", tlasGPU->bvhNode[i].lmin.x, tlasGPU->bvhNode[i].lmin.y, tlasGPU->bvhNode[i].lmin.z, (float)tlasGPU->bvhNode[i].left);
@@ -184,7 +177,7 @@ extern "C" int BuildTLAS(tinybvh::BLASInstance* instances, int instanceCount)
         printf("%g %g %g %g\n", tlasGPU->bvhNode[i].rmin.x, tlasGPU->bvhNode[i].rmin.y, tlasGPU->bvhNode[i].rmin.z, (float)tlasGPU->bvhNode[i].triCount);
         printf("%g %g %g %g\n", tlasGPU->bvhNode[i].rmax.x, tlasGPU->bvhNode[i].rmax.y, tlasGPU->bvhNode[i].rmax.z, (float)tlasGPU->bvhNode[i].firstTri);
     }
-    printf("--------------------\n");
+    printf("--------------------\n");*/
 
     return AddTLAS(tlasGPU);
 }

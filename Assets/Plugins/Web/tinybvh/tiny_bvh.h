@@ -93,6 +93,7 @@ THE SOFTWARE.
 // Derived; for convenience:
 #define INST_IDX_SHFT (32 - TLAS_BITS)
 #define PRIM_IDX_MASK ((1 << INST_IDX_SHFT) - 1)
+#define PRIM_IDX_MASK_DBL 0x00000000ffffffff
 
 // SAH BVH building: Heuristic parameters
 // CPU builds: C_INT = 1, C_TRAV = 1 seems optimal.
@@ -483,6 +484,13 @@ struct Ray
 
 #ifdef DOUBLE_PRECISION_SUPPORT
 
+struct IntersectionEx
+{
+	// Double-precision hit record.
+	double t, u, v;	// distance along ray & barycentric coordinates of the intersection
+	uint64_t prim;	// primitive index
+};
+
 struct RayEx
 {
 	// Double-precision ray definition.
@@ -494,11 +502,11 @@ struct RayEx
 		double rl = 1.0 / sqrt( D.x * D.x + D.y * D.y + D.z * D.z );
 		D.x *= rl, D.y *= rl, D.z *= rl;
 		rD.x = 1.0 / D.x, rD.y = 1.0 / D.y, rD.z = 1.0 / D.z;
-		u = v = 0, t = tmax;
+		hit.u = hit.v = 0, hit.t = tmax;
 	}
 	bvhdbl3 O, D, rD;
-	double t, u, v;
-	uint64_t primIdx;
+	IntersectionEx hit;
+	uint64_t instIdx = 0;
 };
 
 #endif
@@ -538,6 +546,7 @@ public:
 	uint32_t usedNodes = 0;			// number of nodes used for the BVH.
 	uint32_t triCount = 0;			// number of primitives in the BVH.
 	uint32_t idxCount = 0;			// number of primitive indices; can exceed triCount for SBVH.
+	bvhvec3 aabbMin, aabbMax;		// bounds of the root node of the BVH.
 	// Custom memory allocation
 	void* AlignedAlloc( size_t size );
 	void AlignedFree( void* ptr );
@@ -591,7 +600,7 @@ public:
 	void Build( const bvhvec4slice& vertices );
 	void Build( const bvhvec4* vertices, const uint32_t* indices, const uint32_t primCount );
 	void Build( const bvhvec4slice& vertices, const uint32_t* indices, const uint32_t primCount );
-	void Build( const BLASInstance* bvhs, const uint32_t instCount );
+	void Build( BLASInstance* instances, const uint32_t instCount, BVHBase** blasses, const uint32_t blasCount );
 	void BuildHQ( const bvhvec4* vertices, const uint32_t primCount );
 	void BuildHQ( const bvhvec4slice& vertices );
 	void BuildHQ( const bvhvec4* vertices, const uint32_t* indices, const uint32_t primCount );
@@ -641,6 +650,8 @@ public:
 	uint32_t* vertIdx = 0;			// vertex indices, only used in case the BVH is built over indexed prims.
 	uint32_t* triIdx = 0;			// primitive index array.
 	BLASInstance* instList = 0;		// instance array, for top-level acceleration structure.
+	BVHBase** blasList = 0;			// blas array, for TLAS traversal.
+	uint32_t blasCount = 0;			// number of blasses in blasList.
 	BVHNode* bvhNode = 0;			// BVH node pool, Wald 32-byte format. Root is always in node 0.
 	uint32_t newNodePtr = 0;		// used during build to keep track of next free node in pool.
 	Fragment* fragment = 0;			// input primitive bounding boxes.
@@ -676,23 +687,28 @@ public:
 	BVH_Double( BVHContext ctx = {} ) { context = ctx; }
 	~BVH_Double();
 	void Build( const bvhdbl3* vertices, const uint64_t primCount );
-	void Build( const BLASInstanceEx* bvhs, const uint64_t instCount );
+	void Build( BLASInstanceEx* bvhs, const uint64_t instCount, BVH_Double** blasses, const uint64_t blasCount );
 	void PrepareBuild( const bvhdbl3* vertices, const uint64_t primCount );
 	void Build();
 	double SAHCost( const uint64_t nodeIdx = 0 ) const;
 	int32_t Intersect( RayEx& ray ) const;
 	bool IsOccluded( const RayEx& ray ) const;
+	bool IsOccludedTLAS( const RayEx& ray ) const;
+	int32_t IntersectTLAS( RayEx& ray ) const;
 	bvhdbl3* verts = 0;				// pointer to input primitive array, double-precision, 3x24 bytes per tri.
 	Fragment* fragment = 0;			// input primitive bounding boxes, double-precision.
 	BVHNode* bvhNode = 0;			// BVH node, double precision format.
 	uint64_t* triIdx = 0;			// primitive index array for double-precision bvh.
 	BLASInstanceEx* instList = 0;	// instance array, for top-level acceleration structure.
+	BVH_Double** blasList = 0;		// blas array, for TLAS traversal.
+	uint64_t blasCount = 0;			// number of blasses in blasList.
 	// 64-bit base overrides
 	uint64_t newNodePtr = 0;		// next free bvh pool entry to allocate
 	uint64_t usedNodes = 0;			// number of nodes used for the BVH.
 	uint64_t allocatedNodes = 0;	// number of nodes allocated for the BVH.
 	uint64_t triCount = 0;			// number of primitives in the BVH.
 	uint64_t idxCount = 0;			// number of primitive indices.
+	bvhdbl3 aabbMin, aabbMax;		// bounds of the root node of the BVH.
 	// Custom geometry intersection callback
 	void (*customIntersect)(RayEx&, uint64_t) = 0;
 	bool (*customIsOccluded)(const RayEx&, uint64_t) = 0;
@@ -946,16 +962,20 @@ public:
 // BLASInstance: A TLAS is built over BLAS instances, where a single BLAS can be
 // used with multiple transforms, and multiple BLASses can be combined in a complex
 // scene. The TLAS is built over the world-space AABBs of the BLAS root nodes.
-class BLASInstance
+class ALIGNED( 64 ) BLASInstance
 {
 public:
 	BLASInstance() = default;
-	BLASInstance( BVH* bvh ) : blas( bvh ) {}
+	BLASInstance( uint32_t idx ) : blasIdx( idx ) {}
 	float transform[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 }; // identity
 	float invTransform[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 }; // identity
-	BVH* blas = 0;					// Bottom-level acceleration structure.
-	bvhvec3 TransformPoint( const bvhvec3& v, const float* T ) const;
-	bvhvec3 TransformVector( const bvhvec3& v, const float* T ) const;
+	bvhvec3 aabbMin = bvhvec3( BVH_FAR );
+	uint32_t blasIdx = 0;
+	bvhvec3 aabbMax = bvhvec3( -BVH_FAR );
+	uint32_t dummy = 0;
+	void Update( BVHBase * blas );
+	bvhvec3 TransformPoint( const bvhvec3 & v, const float* T ) const;
+	bvhvec3 TransformVector( const bvhvec3 & v, const float* T ) const;
 	void InvertTransform();
 };
 
@@ -964,10 +984,14 @@ class BLASInstanceEx
 {
 public:
 	BLASInstanceEx() = default;
-	BLASInstanceEx( BVH_Double* bvh ) : blas( bvh ) {}
+	BLASInstanceEx( uint64_t idx ) : blasIdx( idx ) {}
 	double transform[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 }; // identity
 	double invTransform[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 }; // identity
-	BVH_Double* blas = 0;			// Bottom-level acceleration structure.
+	bvhdbl3 aabbMin = bvhdbl3( BVH_DBL_FAR );
+	uint64_t blasIdx = 0;
+	bvhdbl3 aabbMax = bvhdbl3( -BVH_DBL_FAR );
+	uint64_t dummy = 0;
+	void Update( BVH_Double* blas );
 	bvhdbl3 TransformPoint( const bvhdbl3& v, const double* T ) const;
 	bvhdbl3 TransformVector( const bvhdbl3& v, const double* T ) const;
 	void InvertTransform();
@@ -1125,6 +1149,7 @@ void BVHBase::CopyBasePropertiesFrom( const BVHBase& original )
 	this->context = original.context;
 	this->triCount = original.triCount;
 	this->idxCount = original.idxCount;
+	this->aabbMin = original.aabbMin, this->aabbMax = original.aabbMax;
 }
 
 // BVH implementation
@@ -1328,6 +1353,7 @@ void BVH::BuildQuick( const bvhvec4slice& vertices )
 		if (taskCount == 0) break; else nodeIdx = task[--taskCount];
 	}
 	// all done.
+	aabbMin = bvhNode[0].aabbMin, aabbMax = bvhNode[0].aabbMax;
 	refittable = true; // not using spatial splits: can refit this BVH
 	may_have_holes = false; // the reference builder produces a continuous list of nodes
 	usedNodes = newNodePtr;
@@ -1364,7 +1390,7 @@ void BVH::Build( const bvhvec4slice& vertices, const uint32_t* indices, uint32_t
 	bvh_over_indices = true;
 }
 
-void BVH::Build( const BLASInstance* bvhs, const uint32_t instCount )
+void BVH::Build( BLASInstance* instances, const uint32_t instCount, BVHBase** blasses, const uint32_t bCount )
 {
 	FATAL_ERROR_IF( instCount == 0, "BVH::Build( BLASInstance*, instCount ), instCount == 0." );
 	triCount = idxCount = instCount;
@@ -1380,28 +1406,24 @@ void BVH::Build( const BLASInstance* bvhs, const uint32_t instCount )
 		triIdx = (uint32_t*)AlignedAlloc( instCount * sizeof( uint32_t ) );
 		fragment = (Fragment*)AlignedAlloc( instCount * sizeof( Fragment ) );
 	}
-	instList = (BLASInstance*)bvhs;
+	instList = instances;
+	blasList = blasses;
+	blasCount = bCount;
 	// copy relevant data from instance array
 	BVHNode& root = bvhNode[0];
 	root.leftFirst = 0, root.triCount = instCount, root.aabbMin = bvhvec3( BVH_FAR ), root.aabbMax = bvhvec3( -BVH_FAR );
 	for (uint32_t i = 0; i < instCount; i++)
 	{
-		FATAL_ERROR_IF( instList[i].blas->bvhNode == 0, "BVH::Build( BLASInstance*, .. ), BLAS not built." );
-		// transform the eight corners of the root node aabb using the instance
-		// transform and calculate the worldspace aabb over those.
-		instList[i].InvertTransform(); // TODO: done unconditionally; for a big TLAS this may be wasteful. Detect changes automatically?
-		bvhvec3 minBounds = bvhvec3( BVH_FAR ), maxBounds = bvhvec3( -BVH_FAR );
-		bvhvec3 bmin = instList[i].blas->bvhNode[0].aabbMin, bmax = instList[i].blas->bvhNode[0].aabbMax;
-		for (int32_t j = 0; j < 8; j++)
+		if (blasList != nullptr)
 		{
-			const bvhvec3 p( j & 1 ? bmax.x : bmin.x, j & 2 ? bmax.y : bmin.y, j & 4 ? bmax.z : bmin.z );
-			const bvhvec3 t = instList[i].TransformPoint( p, instList[i].transform );
-			minBounds = tinybvh_min( minBounds, t ), maxBounds = tinybvh_max( maxBounds, t );
+			uint32_t blasIdx = instList[i].blasIdx;
+			BVH* blas = (BVH*)blasList[blasIdx];
+			instList[i].Update( blas );
 		}
-		fragment[i].bmin = minBounds, fragment[i].primIdx = i;
-		fragment[i].bmax = maxBounds, fragment[i].clipped = 0;
-		root.aabbMin = tinybvh_min( root.aabbMin, minBounds );
-		root.aabbMax = tinybvh_max( root.aabbMax, maxBounds ), triIdx[i] = i;
+		fragment[i].bmin = instList[i].aabbMin, fragment[i].primIdx = i;
+		fragment[i].bmax = instList[i].aabbMax, fragment[i].clipped = 0;
+		root.aabbMin = tinybvh_min( root.aabbMin, instList[i].aabbMin );
+		root.aabbMax = tinybvh_max( root.aabbMax, instList[i].aabbMax ), triIdx[i] = i;
 	}
 	// start build
 	newNodePtr = 2;
@@ -1553,6 +1575,7 @@ void BVH::Build()
 		if (taskCount == 0) break; else nodeIdx = task[--taskCount];
 	}
 	// all done.
+	aabbMin = bvhNode[0].aabbMin, aabbMax = bvhNode[0].aabbMax;
 	refittable = true; // not using spatial splits: can refit this BVH
 	may_have_holes = false; // the reference builder produces a continuous list of nodes
 	bvh_over_aabbs = (verts == 0); // bvh over aabbs is suitable as TLAS
@@ -1892,6 +1915,7 @@ void BVH::BuildHQ()
 	for (uint32_t i = 0; i < triCount + slack; i++) triIdx[i] = fragment[triIdx[i]].primIdx;
 	AlignedFree( triIdxB );
 	// all done.
+	aabbMin = bvhNode[0].aabbMin, aabbMax = bvhNode[0].aabbMax;
 	refittable = false; // can't refit an SBVH
 	may_have_holes = false; // there may be holes in the index list, but not in the node list
 	usedNodes = newNodePtr;
@@ -1950,6 +1974,7 @@ void BVH::Refit( const uint32_t nodeIdx )
 		node.aabbMin = tinybvh_min( left.aabbMin, right.aabbMin );
 		node.aabbMax = tinybvh_max( left.aabbMax, right.aabbMax );
 	}
+	aabbMin = bvhNode[0].aabbMin, aabbMax = bvhNode[0].aabbMax;
 }
 
 int32_t BVH::Intersect( Ray& ray ) const
@@ -2003,7 +2028,7 @@ int32_t BVH::IntersectTLAS( Ray& ray ) const
 				// BLAS traversal
 				const uint32_t instIdx = triIdx[node->leftFirst + i];
 				const BLASInstance& inst = instList[instIdx];
-				const BVH* blas = inst.blas;
+				const BVH* blas = (const BVH*)blasList[inst.blasIdx]; // TODO: actually we don't know BVH type.
 				// 1. Transform ray with the inverse of the instance transform
 				tmp.O = inst.TransformPoint( ray.O, inst.invTransform );
 				tmp.D = inst.TransformVector( ray.D, inst.invTransform );
@@ -2093,7 +2118,7 @@ bool BVH::IsOccludedTLAS( const Ray& ray ) const
 			{
 				// BLAS traversal
 				BLASInstance& inst = instList[triIdx[node->leftFirst + i]];
-				BVH* blas = inst.blas;
+				BVH* blas = (BVH*)blasList[inst.blasIdx]; // TODO: actually we don't know BVH type.
 				// 1. Transform ray with the inverse of the instance transform
 				tmp.O = inst.TransformPoint( ray.O, inst.invTransform );
 				tmp.D = inst.TransformVector( ray.D, inst.invTransform );
@@ -2418,6 +2443,7 @@ void BVH_Verbose::Refit( const uint32_t nodeIdx )
 		node.aabbMin = tinybvh_min( bvhNode[node.left].aabbMin, bvhNode[node.right].aabbMin );
 		node.aabbMax = tinybvh_max( bvhNode[node.left].aabbMax, bvhNode[node.right].aabbMax );
 	}
+	if (nodeIdx == 0) aabbMin = node.aabbMin, aabbMax = node.aabbMax;
 }
 
 void BVH_Verbose::Compact()
@@ -2945,6 +2971,7 @@ template<int M> void MBVH<M>::Refit( const uint32_t nodeIdx )
 			bmax = tinybvh_max( bmax, child.aabbMax );
 		}
 	}
+	if (nodeIdx == 0) aabbMin = node.aabbMin, aabbMax = node.aabbMax;
 }
 
 template<int M> void MBVH<M>::ConvertFrom( const BVH& original )
@@ -5536,7 +5563,7 @@ BVH_Double::~BVH_Double()
 	AlignedFree( triIdx );
 }
 
-void BVH_Double::Build( const BLASInstanceEx* bvhs, const uint64_t instCount )
+void BVH_Double::Build( BLASInstanceEx* bvhs, const uint64_t instCount, BVH_Double** blasses, const uint64_t bCount )
 {
 	FATAL_ERROR_IF( instCount == 0, "BVH_Double::Build( BLASInstanceEx*, instCount ), instCount == 0." );
 	triCount = idxCount = instCount;
@@ -5552,26 +5579,19 @@ void BVH_Double::Build( const BLASInstanceEx* bvhs, const uint64_t instCount )
 		fragment = (Fragment*)AlignedAlloc( instCount * sizeof( Fragment ) );
 	}
 	instList = (BLASInstanceEx*)bvhs;
+	blasList = blasses;
+	blasCount = bCount;
 	// copy relevant data from instance array
 	BVHNode& root = bvhNode[0];
 	root.leftFirst = 0, root.triCount = instCount, root.aabbMin = bvhdbl3( BVH_DBL_FAR ), root.aabbMax = bvhdbl3( -BVH_DBL_FAR );
 	for (uint64_t i = 0; i < instCount; i++)
 	{
-		FATAL_ERROR_IF( instList[i].blas->bvhNode == 0, "BVH::Build( BLASInstanceEx*, .. ), BLAS not built." );
-		// transform the eight corners of the root node aabb using the instance
-		// transform and calculate the worldspace aabb over those.
-		instList[i].InvertTransform(); // TODO: done unconditionally; for a big TLAS this may be wasteful. Detect changes automatically?
-		bvhdbl3 minBounds = bvhdbl3( BVH_DBL_FAR ), maxBounds = bvhdbl3( -BVH_DBL_FAR );
-		bvhdbl3 bmin = instList[i].blas->bvhNode[0].aabbMin, bmax = instList[i].blas->bvhNode[0].aabbMax;
-		for (int32_t j = 0; j < 8; j++)
-		{
-			const bvhdbl3 p( j & 1 ? bmax.x : bmin.x, j & 2 ? bmax.y : bmin.y, j & 4 ? bmax.z : bmin.z );
-			const bvhdbl3 t = instList[i].TransformPoint( p, instList[i].transform );
-			minBounds = tinybvh_min( minBounds, t ), maxBounds = tinybvh_max( maxBounds, t );
-		}
-		fragment[i].bmin = minBounds, fragment[i].primIdx = i, fragment[i].bmax = maxBounds;
-		root.aabbMin = tinybvh_min( root.aabbMin, minBounds );
-		root.aabbMax = tinybvh_max( root.aabbMax, maxBounds ), triIdx[i] = i;
+		uint64_t blasIdx = instList[i].blasIdx;
+		BVH_Double* blas = blasList[blasIdx];
+		instList[i].Update( blas );
+		fragment[i].bmin = instList[i].aabbMin, fragment[i].primIdx = i, fragment[i].bmax = instList[i].aabbMax;
+		root.aabbMin = tinybvh_min( root.aabbMin, instList[i].aabbMin );
+		root.aabbMax = tinybvh_max( root.aabbMax, instList[i].aabbMax ), triIdx[i] = i;
 	}
 	// start build
 	newNodePtr = 1;
@@ -5705,6 +5725,7 @@ void BVH_Double::Build()
 		if (taskCount == 0) break; else nodeIdx = task[--taskCount];
 	}
 	// all done.
+	aabbMin = bvhNode[0].aabbMin, aabbMax = bvhNode[0].aabbMax;
 	refittable = true; // not using spatial splits: can refit this BVH
 	may_have_holes = false; // the reference builder produces a continuous list of nodes
 	bvh_over_aabbs = (verts == 0); // bvh over aabbs is suitable as TLAS
@@ -5729,6 +5750,7 @@ double BVH_Double::SAHCost( const uint64_t nodeIdx ) const
 // Traverse the default BVH layout, double-precision.
 int32_t BVH_Double::Intersect( RayEx& ray ) const
 {
+	if (instList) return IntersectTLAS( ray );
 	BVHNode* node = &bvhNode[0], * stack[64];
 	uint32_t stackPtr = 0, cost = 0;
 	while (1)
@@ -5758,11 +5780,62 @@ int32_t BVH_Double::Intersect( RayEx& ray ) const
 				const double v = f * dot( ray.D, q );
 				if (v < 0 || u + v > 1) continue;
 				const double t = f * dot( edge2, q );
-				if (t > 0 && t < ray.t)
+				if (t > 0 && t < ray.hit.t)
 				{
 					// register a hit: ray is shortened to t
-					ray.t = t, ray.u = u, ray.v = v, ray.primIdx = idx;
+					ray.hit.t = t, ray.hit.u = u, ray.hit.v = v;
+					ray.hit.prim = idx + ray.instIdx;
 				}
+			}
+			if (stackPtr == 0) break; else node = stack[--stackPtr];
+			continue;
+		}
+		BVHNode* child1 = &bvhNode[node->leftFirst];
+		BVHNode* child2 = &bvhNode[node->leftFirst + 1];
+		double dist1 = child1->Intersect( ray ), dist2 = child2->Intersect( ray );
+		if (dist1 > dist2) { tinybvh_swap( dist1, dist2 ); tinybvh_swap( child1, child2 ); }
+		if (dist1 == BVH_DBL_FAR /* missed both child nodes */)
+		{
+			if (stackPtr == 0) break; else node = stack[--stackPtr];
+		}
+		else /* hit at least one node */
+		{
+			node = child1; /* continue with the nearest */
+			if (dist2 != BVH_DBL_FAR) stack[stackPtr++] = child2; /* push far child */
+		}
+	}
+	return cost;
+}
+
+// Traverse a double-precision TLAS.
+int32_t BVH_Double::IntersectTLAS( RayEx& ray ) const
+{
+	BVHNode* node = &bvhNode[0], * stack[64];
+	uint32_t stackPtr = 0, cost = 0;
+	while (1)
+	{
+		cost += C_TRAV;
+		if (node->isLeaf())
+		{
+			RayEx tmp;
+			for (uint32_t i = 0; i < node->triCount; i++)
+			{
+				// BLAS traversal
+				const uint64_t instIdx = triIdx[node->leftFirst + i];
+				BLASInstanceEx& inst = instList[instIdx];
+				BVH_Double* blas = blasList[inst.blasIdx];
+				// 1. Transform ray with the inverse of the instance transform
+				tmp.O = inst.TransformPoint( ray.O, inst.invTransform );
+				tmp.D = inst.TransformVector( ray.D, inst.invTransform );
+				tmp.rD.x = tmp.D.x > 1e-24 ? (1.0 / tmp.D.x) : (tmp.D.x < -1e-24 ? (1.0 / tmp.D.x) : BVH_DBL_FAR);
+				tmp.rD.y = tmp.D.y > 1e-24 ? (1.0 / tmp.D.y) : (tmp.D.y < -1e-24 ? (1.0 / tmp.D.y) : BVH_DBL_FAR);
+				tmp.rD.z = tmp.D.z > 1e-24 ? (1.0 / tmp.D.z) : (tmp.D.z < -1e-24 ? (1.0 / tmp.D.z) : BVH_DBL_FAR);
+				tmp.instIdx = instIdx << 32UL;
+				tmp.hit = ray.hit;
+				// 2. Traverse BLAS with the transformed ray
+				cost += blas->Intersect( tmp );
+				// 3. Restore ray
+				ray.hit = tmp.hit;
 			}
 			if (stackPtr == 0) break; else node = stack[--stackPtr];
 			continue;
@@ -5786,6 +5859,7 @@ int32_t BVH_Double::Intersect( RayEx& ray ) const
 
 bool BVH_Double::IsOccluded( const RayEx& ray ) const
 {
+	if (instList) return IsOccludedTLAS( ray );
 	BVHNode* node = &bvhNode[0], * stack[64];
 	uint32_t stackPtr = 0;
 	while (1)
@@ -5814,7 +5888,50 @@ bool BVH_Double::IsOccluded( const RayEx& ray ) const
 				const double v = f * dot( ray.D, q );
 				if (v < 0 || u + v > 1) continue;
 				const double t = f * dot( edge2, q );
-				if (t > 0 && t < ray.t) return true;
+				if (t > 0 && t < ray.hit.t) return true;
+			}
+			if (stackPtr == 0) break; else node = stack[--stackPtr];
+			continue;
+		}
+		BVHNode* child1 = &bvhNode[node->leftFirst];
+		BVHNode* child2 = &bvhNode[node->leftFirst + 1];
+		double dist1 = child1->Intersect( ray ), dist2 = child2->Intersect( ray );
+		if (dist1 > dist2) { tinybvh_swap( dist1, dist2 ); tinybvh_swap( child1, child2 ); }
+		if (dist1 == BVH_DBL_FAR /* missed both child nodes */)
+		{
+			if (stackPtr == 0) break; else node = stack[--stackPtr];
+		}
+		else /* hit at least one node */
+		{
+			node = child1; /* continue with the nearest */
+			if (dist2 != BVH_DBL_FAR) stack[stackPtr++] = child2; /* push far child */
+		}
+	}
+	return false;
+}
+
+bool BVH_Double::IsOccludedTLAS( const RayEx& ray ) const
+{
+	BVHNode* node = &bvhNode[0], * stack[64];
+	uint32_t stackPtr = 0;
+	RayEx tmp;
+	while (1)
+	{
+		if (node->isLeaf())
+		{
+			for (uint32_t i = 0; i < node->triCount; i++)
+			{
+				// BLAS traversal
+				BLASInstanceEx& inst = instList[triIdx[node->leftFirst + i]];
+				BVH_Double* blas = blasList[inst.blasIdx];
+				// 1. Transform ray with the inverse of the instance transform
+				tmp.O = inst.TransformPoint( ray.O, inst.invTransform );
+				tmp.D = inst.TransformVector( ray.D, inst.invTransform );
+				tmp.rD.x = tmp.D.x > 1e-24 ? (1.0 / tmp.D.x) : (tmp.D.x < -1e-24 ? (1.0 / tmp.D.x) : BVH_DBL_FAR);
+				tmp.rD.y = tmp.D.y > 1e-24 ? (1.0 / tmp.D.y) : (tmp.D.y < -1e-24 ? (1.0 / tmp.D.y) : BVH_DBL_FAR);
+				tmp.rD.z = tmp.D.z > 1e-24 ? (1.0 / tmp.D.z) : (tmp.D.z < -1e-24 ? (1.0 / tmp.D.z) : BVH_DBL_FAR);
+				// 2. Traverse BLAS with the transformed ray
+				if (blas->IsOccluded( tmp )) return true;
 			}
 			if (stackPtr == 0) break; else node = stack[--stackPtr];
 			continue;
@@ -5848,7 +5965,7 @@ double BVH_Double::BVHNode::Intersect( const RayEx& ray ) const
 	double tz1 = (aabbMin.z - ray.O.z) * ray.rD.z, tz2 = (aabbMax.z - ray.O.z) * ray.rD.z;
 	tmin = tinybvh_max( tmin, tinybvh_min( tz1, tz2 ) );
 	tmax = tinybvh_min( tmax, tinybvh_max( tz1, tz2 ) );
-	if (tmax >= tmin && tmin < ray.t && tmax >= 0) return tmin; else return BVH_DBL_FAR;
+	if (tmax >= tmin && tmin < ray.hit.t && tmax >= 0) return tmin; else return BVH_DBL_FAR;
 }
 
 #endif
@@ -5858,6 +5975,22 @@ double BVH_Double::BVHNode::Intersect( const RayEx& ray ) const
 //        H E L P E R S
 //
 // ============================================================================
+
+// Update
+void BLASInstance::Update( BVHBase* blas )
+{
+	InvertTransform(); // TODO: done unconditionally; for a big TLAS this may be wasteful. Detect changes automatically?
+	// transform the eight corners of the root node aabb using the
+	// instance transform and calculate the worldspace aabb over those.
+	aabbMin = bvhvec3( BVH_FAR ), aabbMax = bvhvec3( -BVH_FAR );
+	bvhvec3 bmin = blas->aabbMin, bmax = blas->aabbMax;
+	for (int32_t j = 0; j < 8; j++)
+	{
+		const bvhvec3 p( j & 1 ? bmax.x : bmin.x, j & 2 ? bmax.y : bmin.y, j & 4 ? bmax.z : bmin.z );
+		const bvhvec3 t = TransformPoint( p, transform );
+		aabbMin = tinybvh_min( aabbMin, t ), aabbMax = tinybvh_max( aabbMax, t );
+	}
+}
 
 // TransformPoint
 bvhvec3 BLASInstance::TransformPoint( const bvhvec3& v, const float* T ) const
@@ -5905,6 +6038,22 @@ void BLASInstance::InvertTransform()
 }
 
 #ifdef DOUBLE_PRECISION_SUPPORT
+
+// Update
+void BLASInstanceEx::Update( BVH_Double* blas )
+{
+	InvertTransform(); // TODO: done unconditionally; for a big TLAS this may be wasteful. Detect changes automatically?
+	// transform the eight corners of the root node aabb using the
+	// instance transform and calculate the worldspace aabb over those.
+	aabbMin = bvhdbl3( BVH_FAR ), aabbMax = bvhdbl3( -BVH_FAR );
+	bvhdbl3 bmin = blas->aabbMin, bmax = blas->aabbMax;
+	for (int32_t j = 0; j < 8; j++)
+	{
+		const bvhdbl3 p( j & 1 ? bmax.x : bmin.x, j & 2 ? bmax.y : bmin.y, j & 4 ? bmax.z : bmin.z );
+		const bvhdbl3 t = TransformPoint( p, transform );
+		aabbMin = tinybvh_min( aabbMin, t ), aabbMax = tinybvh_max( aabbMax, t );
+	}
+}
 
 // TransformPoint
 bvhdbl3 BLASInstanceEx::TransformPoint( const bvhdbl3& v, const double* T ) const
