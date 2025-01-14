@@ -12,21 +12,23 @@ using UnityEngine.Experimental.Rendering;
 
 #if USE_TLAS
 // Instance data passed to the GPU for rendering.
+// This must match GPUInstance in tlas.hlsl.
 struct GPUInstance
 {
-    public int materialIndex; 
     public int bvhOffset;
     public int triOffset;
     public int triAttributeOffset;
-    public Matrix4x4 transform;
-    public Matrix4x4 inverseTransform;
+    public int materialIndex;
+    public Matrix4x4 localToWorld;
+    public Matrix4x4 worldToLocal;
 };
 
 // Instance data passed to TinyBVH for building the TLAS.
+// This must match tinybvh::BLASInstance.
 struct BLASInstance
 {
-    public Matrix4x4 transform;
-    public Matrix4x4 inverseTransform;
+    public Matrix4x4 localToWorld;
+    public Matrix4x4 worldToLocal;
     public Vector3 aabbMin;
     public int blasIndex;
     public Vector3 aabbMax;
@@ -156,8 +158,8 @@ public class BVHScene
         cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", _materialsBuffer);
 #if USE_TLAS
         cmd.SetComputeBufferParam(shader, kernelIndex, "TLASNodes", _tlasNodesBuffer);
-        cmd.SetComputeBufferParam(shader, kernelIndex, "TLASInstances", _gpuInstancesBuffer);
-        cmd.SetComputeIntParam(shader, "TLASInstanceCount", _gpuInstanceCount);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "GPUInstances", _gpuInstancesBuffer);
+        cmd.SetComputeIntParam(shader, "GPUInstanceCount", _gpuInstanceCount);
 #endif
 
         if (_textureDataBuffer != null)
@@ -661,23 +663,24 @@ public class BVHScene
 
             int materialIndex = _materials.IndexOf(material);
 
-            Matrix4x4 transform = renderer.localToWorldMatrix;
-            Matrix4x4 inverseTransform = renderer.worldToLocalMatrix;
+            Matrix4x4 localToWorld = renderer.localToWorldMatrix;
+            Matrix4x4 worldToLocal = renderer.worldToLocalMatrix;
             Bounds bounds = renderer.bounds;
 
             int bvhIndex = bvhList[meshIndex];
-            _blasInstances[instanceIndex].transform = transform;
-            _blasInstances[instanceIndex].inverseTransform = inverseTransform;
+
+            _blasInstances[instanceIndex].localToWorld = localToWorld;
+            _blasInstances[instanceIndex].worldToLocal = worldToLocal;
             _blasInstances[instanceIndex].aabbMin = bounds.min;
             _blasInstances[instanceIndex].blasIndex = bvhIndex;
             _blasInstances[instanceIndex].aabbMax = bounds.max;
 
-            _gpuInstances[instanceIndex].materialIndex = materialIndex;
             _gpuInstances[instanceIndex].bvhOffset = nodeOffsetList[meshIndex] / kBVHNodeSize;
             _gpuInstances[instanceIndex].triOffset = triOffsetList[meshIndex] / kBVHTriSize;
             _gpuInstances[instanceIndex].triAttributeOffset = _triangleAttributeOffsets[meshIndex] / kTriangleAttributeSize;
-            _gpuInstances[instanceIndex].transform = transform;
-            _gpuInstances[instanceIndex].inverseTransform = inverseTransform;
+            _gpuInstances[instanceIndex].materialIndex = materialIndex;
+            _gpuInstances[instanceIndex].localToWorld = localToWorld;
+            _gpuInstances[instanceIndex].worldToLocal = worldToLocal;
 
             Debug.Log($"INSTANCE {instanceIndex} Material: {materialIndex} BVH: {bvhIndex} Bounds: {bounds.min}x{bounds.max} TriOffset: {_gpuInstances[instanceIndex].triOffset} TriAttrOffset: {_gpuInstances[instanceIndex].triAttributeOffset}");
 
@@ -745,11 +748,11 @@ public class BVHScene
 
             int meshIndex = _meshes.IndexOf(mesh);
 
-            Matrix4x4 transform = renderer.localToWorldMatrix;
+            Matrix4x4 localToWorld = renderer.localToWorldMatrix;
 
             // Check if the object's transform has changed since the last update.
             // If it hasn't, we don't need to update the TLAS.
-            if (transform == _gpuInstances[instanceIndex].transform)
+            if (localToWorld == _gpuInstances[instanceIndex].localToWorld)
             {
                 instanceIndex++;
                 continue;
@@ -758,17 +761,17 @@ public class BVHScene
             // A TLAS instance has been updated, we'll need to rebuild the TLAS structure.
             isDirty = true;
 
-            Matrix4x4 inverseTransform = renderer.worldToLocalMatrix;
+            Matrix4x4 worldToLocal = renderer.worldToLocalMatrix;
 
             Bounds bounds = renderer.bounds;
 
-            _blasInstances[instanceIndex].transform = transform;
-            _blasInstances[instanceIndex].inverseTransform = inverseTransform;
+            _blasInstances[instanceIndex].localToWorld = localToWorld;
+            _blasInstances[instanceIndex].worldToLocal = worldToLocal;
             _blasInstances[instanceIndex].aabbMin = bounds.min;
             _blasInstances[instanceIndex].aabbMax = bounds.max;
 
-            _gpuInstances[instanceIndex].transform = transform;
-            _gpuInstances[instanceIndex].inverseTransform = inverseTransform;
+            _gpuInstances[instanceIndex].localToWorld = localToWorld;
+            _gpuInstances[instanceIndex].worldToLocal = worldToLocal;
 
             instanceIndex++;
         }

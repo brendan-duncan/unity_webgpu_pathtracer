@@ -7,12 +7,12 @@
 #include "ray.hlsl"
 #include "triangle_attributes.hlsl"
 
-struct BVHInstance
+struct GPUInstance
 {
-    int materialIndex;
     int bvhOffset;
     int triOffset;
     int triAttributeOffset;
+    int materialIndex;
     float4x4 localToWorld;
     float4x4 worldToLocal;
 };
@@ -36,12 +36,12 @@ struct TLASNode
 };
 
 bool BackfaceCulling;
-uint TLASInstanceCount;
+uint GPUInstanceCount;
 StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;
 StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
-StructuredBuffer<BVHInstance> TLASInstances;
+StructuredBuffer<GPUInstance> GPUInstances;
 StructuredBuffer<TLASNode> TLASNodes;
 
 // Stack size for BVH traversal
@@ -57,7 +57,7 @@ float3 InterpolateAttribute(float2 barycentric, float3 attr0, float3 attr1, floa
     return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
 }
 
-void IntersectTriangle(const BVHInstance instance, int triAddr, const Ray ray, inout RayHit hit)
+void IntersectTriangle(const GPUInstance instance, int triAddr, const Ray ray, inout RayHit hit)
 {
     float3 v0 = BVHTris[triAddr + 2].xyz;
     float3 e1 = BVHTris[triAddr + 1].xyz;
@@ -181,7 +181,7 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
     return hitmask;
 }
 
-RayHit RayIntersectBvh(const Ray ray, in BVHInstance instance, bool isShadowRay)
+RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
 {
     RayHit hit = (RayHit)0;
     hit.distance = FarPlane;
@@ -276,9 +276,9 @@ RayHit RayIntersectTLAS_NoAccel(const Ray ray, bool isShadowRay)
     RayHit hit = (RayHit)0;
     hit.distance = FarPlane;
 
-    for (uint i = 0; i < TLASInstanceCount; i++)
+    for (uint i = 0; i < GPUInstanceCount; i++)
     {
-        const BVHInstance instance = TLASInstances[i];
+        const GPUInstance instance = GPUInstances[i];
         const float4x4 worldToLocal = instance.worldToLocal;
         Ray rayLocal = {mul(worldToLocal, float4(ray.origin, 1.0f)).xyz, mul(worldToLocal, float4(ray.direction, 0.0f)).xyz};
         RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
@@ -311,7 +311,7 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
             // process leaf node
             for (uint i = 0; i < blasCount; i++)
             {
-                const BVHInstance instance = TLASInstances[firstBlas + i];
+                const GPUInstance instance = GPUInstances[firstBlas + i];
                 const float4x4 worldToLocal = instance.worldToLocal;
 
                 const float3 lO = mul(worldToLocal, float4(O, 1.0f)).xyz;
