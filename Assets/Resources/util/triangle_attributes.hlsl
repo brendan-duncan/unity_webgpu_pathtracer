@@ -11,7 +11,7 @@ struct TriangleAttributes
     float3 tangent0;
     float3 tangent1;
     float3 tangent2;
-    
+
     float2 uv0;
     float2 uv1;
     float2 uv2;

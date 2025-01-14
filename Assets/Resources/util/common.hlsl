@@ -196,7 +196,7 @@ float3x3 GetONB(float3 z)
         float3 x = float3(1.0f + s * z.x * z.x * a, s * b, -s * z.x);
         float3 y = float3(b, s + z.y * z.y * a, -z.y);
     #elif ONB_METHOD == 1
-        //MBR frizvald but attempts to deal with z == -1
+        // MBR frizvald but attempts to deal with z == -1
         // From https://www.shadertoy.com/view/tlVczh
         float k = 1.0f / max(1.0f + z.z, 0.00001);
         // k = min(k, 99995.0);

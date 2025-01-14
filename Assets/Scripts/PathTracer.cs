@@ -348,57 +348,57 @@ public class PathTracer : MonoBehaviour
         int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
         int dispatchY = 1;
 
+        Vector3 lastDirection = _lightDirection;
+        Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+        foreach (Light light in lights)
+        {
+            if (light.type == LightType.Directional)
+            {
+                _lightDirection = -light.transform.forward;
+                _lightColor = light.color * light.intensity;
+                break;
+            }
+        }
+
+        if ((lastDirection - _lightDirection).sqrMagnitude > 0.0001f)
+        {
+            _skyState.Init(new float[] { _lightDirection.x, _lightDirection.y, _lightDirection.z }, new float[] { 0.3f, 0.2f, 0.1f }, skyTurbidity);
+            _skyState.UpdateBuffer(_skyStateBuffer);
+            Reset();
+        }
+
+        // Prepare buffers and output texture
+        if (Utilities.PrepareRenderTexture(ref _outputRT[0], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
+            Reset();
+
+        if (Utilities.PrepareRenderTexture(ref _outputRT[1], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
+            Reset();
+
+        if (_rngStateBuffer != null && (_rngStateBuffer.count != totalPixels || _currentSample == 0))
+        {
+            _rngStateBuffer?.Release();
+            _rngStateBuffer = null;
+        }
+
+        if (_rngStateBuffer == null)
+        {
+            _rngStateBuffer = new ComputeBuffer(totalPixels, 4);
+            // Initialize the random number generator state buffer to random values
+            uint[] rngStateData = new uint[totalPixels];
+            for (int i = 0; i < totalPixels; i++)
+                rngStateData[i] = (uint)UnityEngine.Random.Range(0, uint.MaxValue);
+            _rngStateBuffer.SetData(rngStateData);
+        }
+
+        if (_cameraToWorldMatrix != _camera.cameraToWorldMatrix || _cameraProjectionMatrix != _camera.projectionMatrix)
+        {
+            _cameraToWorldMatrix = _camera.cameraToWorldMatrix;
+            _cameraProjectionMatrix = _camera.projectionMatrix;
+            Reset();
+        }
+
         if (_currentSample < maxSamples)
         {
-            Vector3 lastDirection = _lightDirection;
-            Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
-            foreach (Light light in lights)
-            {
-                if (light.type == LightType.Directional)
-                {
-                    _lightDirection = -light.transform.forward;
-                    _lightColor = light.color * light.intensity;
-                    break;
-                }
-            }
-
-            if ((lastDirection - _lightDirection).sqrMagnitude > 0.0001f)
-            {
-                _skyState.Init(new float[] { _lightDirection.x, _lightDirection.y, _lightDirection.z }, new float[] { 0.3f, 0.2f, 0.1f }, skyTurbidity);
-                _skyState.UpdateBuffer(_skyStateBuffer);
-                Reset();
-            }
-
-            // Prepare buffers and output texture
-            if (Utilities.PrepareRenderTexture(ref _outputRT[0], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
-                Reset();
-
-            if (Utilities.PrepareRenderTexture(ref _outputRT[1], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
-                Reset();
-
-            if (_rngStateBuffer != null && (_rngStateBuffer.count != totalPixels || _currentSample == 0))
-            {
-                _rngStateBuffer?.Release();
-                _rngStateBuffer = null;
-            }
-
-            if (_rngStateBuffer == null)
-            {
-                _rngStateBuffer = new ComputeBuffer(totalPixels, 4);
-                // Initialize the random number generator state buffer to random values
-                uint[] rngStateData = new uint[totalPixels];
-                for (int i = 0; i < totalPixels; i++)
-                    rngStateData[i] = (uint)UnityEngine.Random.Range(0, uint.MaxValue);
-                _rngStateBuffer.SetData(rngStateData);
-            }
-
-            if (_cameraToWorldMatrix != _camera.cameraToWorldMatrix || _cameraProjectionMatrix != _camera.projectionMatrix)
-            {
-                _cameraToWorldMatrix = _camera.cameraToWorldMatrix;
-                _cameraProjectionMatrix = _camera.projectionMatrix;
-                Reset();
-            }
-
             _cmd.BeginSample("Path Tracer");
             {
                 PrepareShader(_cmd, _pathTracerShader, 0);

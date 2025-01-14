@@ -40,19 +40,9 @@ uint TLASInstanceCount;
 StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;
 StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
-StructuredBuffer<BVHInstance> TLASInstances;
-StructuredBuffer<TLASNode> TLASNodes;
 
 // Stack size for BVH traversal
 #define BVH_STACK_SIZE 32
-
-float3 GetGeometricNormal(RayHit hit)
-{
-    float3 v0 = BVHTris[hit.triAddr + 2].xyz;
-    float3 e1 = BVHTris[hit.triAddr + 1].xyz;
-    float3 e2 = BVHTris[hit.triAddr + 0].xyz;
-    return normalize(cross(e1, e2));
-}
 
 float2 InterpolateAttribute(float2 barycentric, float2 attr0, float2 attr1, float2 attr2)
 {
@@ -64,7 +54,7 @@ float3 InterpolateAttribute(float2 barycentric, float3 attr0, float3 attr1, floa
     return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
 }
 
-void IntersectTriangle(in BVHInstance instance, int triAddr, const Ray ray, inout RayHit hit)
+void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
 {
     float3 v0 = BVHTris[triAddr + 2].xyz;
     float3 e1 = BVHTris[triAddr + 1].xyz;
@@ -92,10 +82,9 @@ void IntersectTriangle(in BVHInstance instance, int triAddr, const Ray ray, inou
                 {
                     uint triIndex = asuint(BVHTris[triAddr + 2].w);
                     float2 barycentric = float2(u, v);
-                    TriangleAttributes triAttr = TriangleAttributesBuffer[instance.triAttributeOffset + triIndex];
-                    float3 normal = normalize(InterpolateAttribute(barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+                    TriangleAttributes triAttr = TriangleAttributesBuffer[triIndex];
+                    float3 normal = InterpolateAttribute(barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2);
                     // Use the transposed inverse to transform the normal to world space
-                    normal = normalize(mul(transpose(instance.worldToLocal), float4(normal, 0.0f)).xyz);
                     if (!BackfaceCulling)
                     {
                         hit.normal = normal;
@@ -188,7 +177,7 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
     return hitmask;
 }
 
-RayHit RayIntersectBvh(const Ray ray, in BVHInstance instance, bool isShadowRay)
+RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
 {
     RayHit hit = (RayHit)0;
     hit.distance = FarPlane;
@@ -204,7 +193,7 @@ RayHit RayIntersectBvh(const Ray ray, in BVHInstance instance, bool isShadowRay)
     uint2 triGroup = uint2(0, 0);
     int count = 0;
 
-    const int nodeOffset = instance.bvhOffset;
+    const int nodeOffset = 0;
 
     while (true)
     {
@@ -250,7 +239,7 @@ RayHit RayIntersectBvh(const Ray ray, in BVHInstance instance, bool isShadowRay)
             int triAddr = triGroup.x + (triangleIndex * 3);
 
             // Check intersection and update hit if its closer
-            IntersectTriangle(instance, instance.triOffset + triAddr, ray, hit);
+            IntersectTriangle(triAddr, ray, hit);
 
             triGroup.y -= 1 << triangleIndex;
         }
@@ -268,147 +257,24 @@ RayHit RayIntersectBvh(const Ray ray, in BVHInstance instance, bool isShadowRay)
 
     if (!isShadowRay && hit.distance < FarPlane)
     {
-        TriangleAttributes triAttr = TriangleAttributesBuffer[instance.triAttributeOffset + hit.triIndex];
+        TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
         hit.position = ray.origin + hit.distance * ray.direction;
-        hit.material = Materials[instance.materialIndex];
-        hit.tangent = normalize(mul(instance.localToWorld, float4(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2), 0.0f)).xyz);
+        hit.material = Materials[triAttr.materialIndex];
+        hit.tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
     }
 
     return hit;
 }
 
-RayHit RayIntersectTLAS_NoAccel(const Ray ray, bool isShadowRay)
-{
-    RayHit hit = (RayHit)0;
-    hit.distance = FarPlane;
-
-    for (uint i = 0; i < TLASInstanceCount; i++)
-    {
-        const BVHInstance instance = TLASInstances[i];
-        const float4x4 worldToLocal = instance.worldToLocal;
-        Ray rayLocal = {mul(worldToLocal, float4(ray.origin, 1.0f)).xyz, mul(worldToLocal, float4(ray.direction, 0.0f)).xyz};
-        RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
-        if (blasHit.distance < hit.distance)
-            hit = blasHit;
-    }
-    return hit;
-}
-
-RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
-{
-    RayHit hit = (RayHit)0;
-    hit.distance = FarPlane;
-    bool hitFound = false;
-
-    const float3 O = ray.origin;
-    const float3 rD = rcp(ray.direction);
-
-    uint cost = 0;
-
-    uint node = 0;
-    uint stack[BVH_STACK_SIZE];
-    uint stackPtr = 0;
-    while (true)
-    {
-        // fetch the node
-        const uint blasCount = asuint(TLASNodes[node].rminBlasCount.w);
-        if (blasCount > 0)
-        {
-            const uint firstBlas = asuint(TLASNodes[node].rmaxFirstBlas.w);
-
-            // process leaf node
-            for (uint i = 0; i < blasCount; i++)
-            {
-                const BVHInstance instance = TLASInstances[firstBlas + i];
-                const float4x4 worldToLocal = instance.worldToLocal;
-
-                const float3 lO = mul(worldToLocal, float4(O, 1.0f)).xyz;
-                const float3 lD = mul(worldToLocal, float4(ray.direction, 0.0f)).xyz;
-
-                Ray rayLocal = {lO, lD};
-                RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
-                if (blasHit.distance < hit.distance)
-                {
-                    hit = blasHit;
-                    hitFound = true;
-                }
-            }
-
-            if (stackPtr == 0)
-                break;
-
-            node = stack[--stackPtr];
-            continue;
-        }
-
-        const float3 lmin = TLASNodes[node].lminLeft.xyz;
-        uint left = asuint(TLASNodes[node].lminLeft.w);
-        const float3 lmax = TLASNodes[node].lmaxRight.xyz;
-        uint right = asuint(TLASNodes[node].lmaxRight.w);
-        const float3 rmin = TLASNodes[node].rminBlasCount.xyz; // rmin + blasCount;
-        const float3 rmax = TLASNodes[node].rmaxFirstBlas.xyz; // rmax + firstBlas;
-
-        // child AABB intersection tests
-        const float3 t1a = (lmin - O) * rD;
-        const float3 t2a = (lmax - O) * rD;
-        const float3 t1b = (rmin - O) * rD;
-        const float3 t2b = (rmax - O) * rD;
-
-        const float3 minta = min3(t1a, t2a);
-        const float3 maxta = max3(t1a, t2a);
-        const float3 mintb = min3(t1b, t2b);
-        const float3 maxtb = max3(t1b, t2b);
-
-        const float tmina = max(max(max(minta.x, minta.y), minta.z), 0);
-        const float tmaxa = min(min(min(maxta.x, maxta.y), maxta.z), hit.distance);
-
-        const float tminb = max(max(max(mintb.x, mintb.y), mintb.z), 0);
-        const float tmaxb = min(min(min(maxtb.x, maxtb.y), maxtb.z), hit.distance);
-
-        float dist1 = select(tmina, FarPlane, tmina > tmaxa);
-        float dist2 = select(tminb, FarPlane, tminb > tmaxb);
-
-        // traverse nearest child first
-        if (dist1 > dist2)
-        {
-            float h = dist1;
-            dist1 = dist2;
-            dist2 = h;
-            uint t = left;
-            left = right;
-            right = t;
-        }
-
-        if (dist1 == FarPlane)
-        {
-            if (stackPtr == 0)
-                break;
-
-            node = stack[--stackPtr];
-        }
-        else
-        {
-            node = left;
-            if (dist2 != FarPlane)
-                stack[stackPtr++] = right;
-        }
-    }
-
-    if (!hitFound)
-        hit.distance = FarPlane;
-
-    return hit;
-}
-
 RayHit RayIntersect(in Ray ray)
 {
-    return RayIntersectTLAS_NoAccel(ray, false);
+    return RayIntersectBvh(ray, false);
 }
 
 bool ShadowRayIntersect(in Ray ray)
 {
-    RayHit hit = RayIntersectTLAS(ray, true);
+    RayHit hit = RayIntersectBvh(ray, true);
     return hit.distance < FarPlane;
 }
 

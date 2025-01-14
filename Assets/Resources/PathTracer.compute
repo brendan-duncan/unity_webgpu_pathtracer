@@ -1,8 +1,15 @@
 #pragma kernel PathTracer
 
+#pragma multi_compile __ HAS_TLAS
 #pragma multi_compile __ HAS_TEXTURES
 #pragma multi_compile __ HAS_ENVIRONMENT_TEXTURE
 #pragma multi_compile __ HAS_LIGHTS
+
+#if HAS_TLAS
+#include "util/tlas.hlsl"
+#else
+#include "util/bvh.hlsl"
+#endif
 
 #include "util/camera.hlsl"
 #include "util/common.hlsl"

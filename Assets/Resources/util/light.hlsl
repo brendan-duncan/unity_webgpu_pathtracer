@@ -1,7 +1,6 @@
 #ifndef __UNITY_PATHRACER_LIGHT_HLSL__
 #define __UNITY_PATHRACER_LIGHT_HLSL__
 
-#include "bvh.hlsl"
 #include "common.hlsl"
 
 #define LIGHT_TYPE_SPOT 0

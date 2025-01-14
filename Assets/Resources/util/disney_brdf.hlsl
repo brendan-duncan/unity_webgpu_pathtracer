@@ -71,7 +71,7 @@ DisneyMaterial GetDisneyMaterial(in Ray ray, inout RayHit hit)
     disneyMaterial.specTrans = 1.0f - saturate(baseColorOpacity.a);
     disneyMaterial.ior = clamp(material.data3.w, 1.001f, 2.0f);
     disneyMaterial.anisotropic = clamp(material.data4.y, -0.9, 0.9);
-    
+
     float aspect = sqrt(1.0 - disneyMaterial.anisotropic * 0.9);
     disneyMaterial.ax = max(0.001, disneyMaterial.roughness / aspect);
     disneyMaterial.ay = max(0.001, disneyMaterial.roughness * aspect);
@@ -105,7 +105,7 @@ void TintColors(in DisneyMaterial mat, float eta, out float F0, out float3 Cshee
         ctint = 1.0f;
     F0 = (1.0f - eta) / (1.0f + eta);
     F0 *= F0;
-    
+
     Cspec0 = F0 * lerp((float3)1.0f, ctint, mat.specularTint);
     Csheen = lerp((float3)1.0f, ctint, mat.sheenTint);
 }
