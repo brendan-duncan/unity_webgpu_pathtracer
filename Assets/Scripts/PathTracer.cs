@@ -16,7 +16,6 @@ public enum TonemapMode {
 public enum EnvironmentMode {
     Environment,
     Basic,
-    Physical
 }
 
 [RequireComponent(typeof(Camera))]
@@ -54,8 +53,8 @@ public class PathTracer : MonoBehaviour
     RenderTexture[] _outputRT = { null, null };
     ComputeBuffer _rngStateBuffer;
 
-    ComputeBuffer _skyStateBuffer;
-    SkyState _skyState;
+    //ComputeBuffer _skyStateBuffer;
+    //SkyState _skyState;
     ComputeBuffer _environmentCdfBuffer;
     NativeArray<Color> _envTextureCPU;
     RenderTexture _envTextureCopy;
@@ -124,13 +123,13 @@ public class PathTracer : MonoBehaviour
 
         _lightDirection.Normalize();
 
-        _skyStateBuffer = new ComputeBuffer(40, 4);
-        _skyState = new SkyState();
+        //_skyStateBuffer = new ComputeBuffer(40, 4);
+        //_skyState = new SkyState();
         float[] direction = { _lightDirection.x, _lightDirection.y, _lightDirection.z };
         float[] groundAlbedo = { 1.0f, 1.0f, 1.0f };
 
-        _skyState.Init(direction, groundAlbedo, skyTurbidity);
-        _skyState.UpdateBuffer(_skyStateBuffer);
+        //_skyState.Init(direction, groundAlbedo, skyTurbidity);
+        //_skyState.UpdateBuffer(_skyStateBuffer);
 
         if (environmentTexture != null)
         {
@@ -206,7 +205,7 @@ public class PathTracer : MonoBehaviour
         _outputRT[0]?.Release();
         _outputRT[1]?.Release();
         _cmd?.Release();
-        _skyStateBuffer?.Release();
+        //_skyStateBuffer?.Release();
         _environmentCdfBuffer?.Release();
         _envTextureCopy?.Release();
         _envTextureCopy = null;
@@ -360,12 +359,12 @@ public class PathTracer : MonoBehaviour
             }
         }
 
-        if ((lastDirection - _lightDirection).sqrMagnitude > 0.0001f)
+        /*if ((lastDirection - _lightDirection).sqrMagnitude > 0.0001f)
         {
             _skyState.Init(new float[] { _lightDirection.x, _lightDirection.y, _lightDirection.z }, new float[] { 0.3f, 0.2f, 0.1f }, skyTurbidity);
             _skyState.UpdateBuffer(_skyStateBuffer);
             Reset();
-        }
+        }*/
 
         // Prepare buffers and output texture
         if (Utilities.PrepareRenderTexture(ref _outputRT[0], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
@@ -448,7 +447,7 @@ public class PathTracer : MonoBehaviour
         _cmd.SetComputeTextureParam(shader, kernelIndex, "Output", _outputRT[_currentRT]);
         _cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", _outputRT[1 - _currentRT]);
         _cmd.SetComputeBufferParam(shader, 0, "RNGStateBuffer", _rngStateBuffer);
-        _cmd.SetComputeBufferParam(shader, 0, "SkyStateBuffer", _skyStateBuffer);
+        //_cmd.SetComputeBufferParam(shader, 0, "SkyStateBuffer", _skyStateBuffer);
         _cmd.SetComputeIntParam(shader, "EnvironmentMode", (int)environmentMode);
         _cmd.SetComputeFloatParam(shader, "EnvironmentIntensity", environmentIntensity);
         _cmd.SetComputeVectorParam(shader, "EnvironmentColor", environmentColor);

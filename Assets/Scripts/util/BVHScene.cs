@@ -1,6 +1,6 @@
 // When USE_TLAS is defined, it will use TLAS acceleration structures supporting BVH instancing.
 // When USE_TLAS is not defined, it will use a single BVH acceleration structure for the entire scene.
-//#define USE_TLAS
+#define USE_TLAS
 
 using System;
 using System.Collections.Generic;
