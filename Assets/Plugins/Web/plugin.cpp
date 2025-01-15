@@ -150,18 +150,15 @@ extern "C" int BuildTLAS(tinybvh::BLASInstance* instances, int instanceCount)
 {
     for (int i = 0; i < instanceCount; ++i)
     {
-        // We store the CWBVH but we need to access the BVH for building the TLAS.
-        //tinybvh::BVH8_CWBVH* cwbvh = (tinybvh::BVH8_CWBVH*)instances[i].blas;
-        //tinybvh::BVH* bvh = &cwbvh->bvh8.bvh;
-        //instances[i].blas = bvh;
-
-        printf("BLAS Instance %d blas:%d transform:\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g x %g %g %g\n--------\n", i, instances[i].blasIdx,
-            instances[i].transform[0], instances[i].transform[1], instances[i].transform[2], instances[i].transform[3],
-            instances[i].transform[4], instances[i].transform[5], instances[i].transform[6], instances[i].transform[7],
-            instances[i].transform[8], instances[i].transform[9], instances[i].transform[10], instances[i].transform[11],
-            instances[i].transform[12], instances[i].transform[13], instances[i].transform[14], instances[i].transform[15],
-            instances[i].aabbMin.x, instances[i].aabbMin.y, instances[i].aabbMin.z,
-            instances[i].aabbMax.x, instances[i].aabbMax.y, instances[i].aabbMax.z);
+        const tinybvh::BLASInstance& instance = instances[i];
+        printf("BLAS Instance %d blas:%d padding:%d transform:\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g x %g %g %g\n--------\n", 
+            i, instance.blasIdx, instance.dummy,
+            instance.transform[0], instance.transform[1], instance.transform[2], instance.transform[3],
+            instance.transform[4], instance.transform[5], instance.transform[6], instance.transform[7],
+            instance.transform[8], instance.transform[9], instance.transform[10], instance.transform[11],
+            instance.transform[12], instance.transform[13], instance.transform[14], instance.transform[15],
+            instance.aabbMin.x, instance.aabbMin.y, instance.aabbMin.z,
+            instance.aabbMax.x, instance.aabbMax.y, instance.aabbMax.z);
     }
 
     tinybvh::BVH_GPU* tlasGPU = new tinybvh::BVH_GPU();

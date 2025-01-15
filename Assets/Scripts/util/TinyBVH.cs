@@ -12,40 +12,40 @@ public class TinyBVH
     const string libraryName = "unity-webgpu-pathtracer-plugin";
 #endif
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern int BuildBVH(IntPtr verticesPtr, int count);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern void DestroyBVH(int index);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern bool IsBVHReady(int index);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern IntPtr GetBVHPtr(int index);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern int GetCWBVHNodesSize(int index);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern int GetCWBVHTrisSize(int index);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern bool GetCWBVHData(int index, out IntPtr bvhNodes, out IntPtr bvhTris);
 
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
-    public static extern int BuildTLAS(IntPtr aabbs, int instanceCount);
+    [DllImport(libraryName)]
+    public static extern int BuildTLAS(IntPtr instances, int instanceCount);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern void DestroyTLAS(int index);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern bool IsTLASReady(int index);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern int GetTLASNodesSize(int index);
 
-    [DllImport(libraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(libraryName)]
     public static extern bool GetTLASData(int index, out IntPtr bvhNodes);
 }

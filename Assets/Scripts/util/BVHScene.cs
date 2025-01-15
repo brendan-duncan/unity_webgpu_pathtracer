@@ -1,9 +1,10 @@
 // When USE_TLAS is defined, it will use TLAS acceleration structures supporting BVH instancing.
 // When USE_TLAS is not defined, it will use a single BVH acceleration structure for the entire scene.
-#define USE_TLAS
+//#define USE_TLAS
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
@@ -33,6 +34,8 @@ struct BLASInstance
     public int blasIndex;
     public Vector3 aabbMax;
     public int padding;
+    public Vector4 padding2;
+    public Vector4 padding3;
 };
 #endif
 
@@ -68,6 +71,7 @@ public class BVHScene
     const int kVertexPositionSize = 16;
     const int kTriangleAttributeSize = 100;
     const int kGPUInstanceSize = 144;
+    const int kBLASInstanceSize = 192; // 160 + 32 padding for 64-bit alignment
     const int kBVHNodeSize = 80;
     const int kBVHTriSize = 16;
     // Number of float values in material.hlsl
@@ -669,10 +673,10 @@ public class BVHScene
 
             int bvhIndex = bvhList[meshIndex];
 
-            _blasInstances[instanceIndex].localToWorld = localToWorld;
-            _blasInstances[instanceIndex].worldToLocal = worldToLocal;
+            _blasInstances[instanceIndex].localToWorld = localToWorld;//.transpose;
+            _blasInstances[instanceIndex].worldToLocal = worldToLocal;//.transpose;
             _blasInstances[instanceIndex].aabbMin = bounds.min;
-            _blasInstances[instanceIndex].blasIndex = bvhIndex;
+            _blasInstances[instanceIndex].blasIndex = instanceIndex;
             _blasInstances[instanceIndex].aabbMax = bounds.max;
 
             _gpuInstances[instanceIndex].bvhOffset = nodeOffsetList[meshIndex] / kBVHNodeSize;
@@ -682,7 +686,7 @@ public class BVHScene
             _gpuInstances[instanceIndex].localToWorld = localToWorld;
             _gpuInstances[instanceIndex].worldToLocal = worldToLocal;
 
-            Debug.Log($"INSTANCE {instanceIndex} Material: {materialIndex} BVH: {bvhIndex} Bounds: {bounds.min}x{bounds.max} TriOffset: {_gpuInstances[instanceIndex].triOffset} TriAttrOffset: {_gpuInstances[instanceIndex].triAttributeOffset}");
+            Debug.Log($"INSTANCE {instanceIndex} Mesh: {meshIndex} BVH: {bvhIndex} Material: {materialIndex} Bounds: {bounds.min}x{bounds.max} TriOffset: {_gpuInstances[instanceIndex].triOffset} TriAttrOffset: {_gpuInstances[instanceIndex].triAttributeOffset}");
 
             totalInstancedTriangles += _meshTriangleCount[meshIndex];
         }

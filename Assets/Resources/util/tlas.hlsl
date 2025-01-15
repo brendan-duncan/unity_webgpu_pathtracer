@@ -308,16 +308,23 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
         {
             const uint firstBlas = asuint(TLASNodes[node].rmaxFirstBlas.w);
 
+            /*if (firstBlas == 3)
+            {
+                hitFound = true;
+                hit.distance = 1.0f;
+            }*/
+
             // process leaf node
             for (uint i = 0; i < blasCount; i++)
             {
-                const GPUInstance instance = GPUInstances[firstBlas + i];
+                const uint instanceIndex = firstBlas + i;
+                const GPUInstance instance = GPUInstances[instanceIndex];
                 const float4x4 worldToLocal = instance.worldToLocal;
 
                 const float3 lO = mul(worldToLocal, float4(O, 1.0f)).xyz;
                 const float3 lD = mul(worldToLocal, float4(ray.direction, 0.0f)).xyz;
 
-                Ray rayLocal = {lO, lD};
+                Ray rayLocal = { lO, lD };
                 RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
                 if (blasHit.distance < hit.distance)
                 {
@@ -370,12 +377,6 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
             left = right;
             right = t;
         }
-
-        /*if (dist1 < FarPlane)
-        {
-            hitFound = true;
-            hit.distance = dist1;
-        }*/
 
         if (dist1 == FarPlane)
         {
