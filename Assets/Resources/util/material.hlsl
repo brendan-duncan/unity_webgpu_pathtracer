@@ -1,7 +1,7 @@
 #ifndef __UNITY_PATHTRACER_MATERIAL_HLSL__
 #define __UNITY_PATHTRACER_MATERIAL_HLSL__
 
-struct Material
+struct MaterialData
 {
     float4 data1;
     float4 data2;
@@ -12,7 +12,7 @@ struct Material
     float4 textures;
     float4 texture1Transform;
 };
-StructuredBuffer<Material> Materials;
+StructuredBuffer<MaterialData> Materials;
 
 struct TextureDescriptor
 {
@@ -98,7 +98,7 @@ float4 SampleTexture(int textureIndex, float2 uv, bool linearSample)
 #endif
 }
 
-float3 GetEmission(Material material, float2 uv)
+float3 GetEmission(MaterialData material, float2 uv)
 {
     #if HAS_TEXTURES
     if (material.textures.w < 0.0f)
@@ -113,7 +113,7 @@ float3 GetEmission(Material material, float2 uv)
 #endif
 }
 
-float3 GetNormalMapSample(Material material, float2 uv)
+float3 GetNormalMapSample(MaterialData material, float2 uv)
 {
 #if HAS_TEXTURES
     if (material.textures.z < 0.0f)
@@ -128,7 +128,7 @@ float3 GetNormalMapSample(Material material, float2 uv)
 #endif
 }
 
-float2 GetMetallicRoughness(Material material, float2 uv)
+float2 GetMetallicRoughness(MaterialData material, float2 uv)
 {
 #if HAS_TEXTURES
     if (material.textures.y < 0.0f)
@@ -143,7 +143,7 @@ float2 GetMetallicRoughness(Material material, float2 uv)
 #endif
 }
 
-float4 GetBaseColorOpacity(Material material, float2 uv)
+float4 GetBaseColorOpacity(MaterialData material, float2 uv)
 {
 #if HAS_TEXTURES
     if (material.textures.x < 0.0f)

@@ -2,7 +2,7 @@
 #define __UNITY_PATHTRACER_PATHTRACE_HLSL__
 
 #include "common.hlsl"
-#include "disney_brdf.hlsl"
+#include "brdf.hlsl"
 #include "light.hlsl"
 #include "material.hlsl"
 #include "ray.hlsl"
@@ -40,7 +40,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
             break;
         }
 
-        DisneyMaterial material = GetDisneyMaterial(ray, hit);
+        BRDFMaterial material = GetMaterial(ray, hit);
 
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled
         radiance += material.emission * throughput;
@@ -63,7 +63,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
             radiance += DirectLight(ray, hit, material, rngState) * throughput;
 
             // Sample BSDF for color and outgoing direction
-            scatterSample.f = DisneySample(hit, material, -ray.direction, hit.normal, scatterSample.L, scatterSample.pdf, rngState);
+            scatterSample.f = SampleBRDF(hit, material, -ray.direction, hit.normal, scatterSample.L, scatterSample.pdf, rngState);
             if (scatterSample.pdf > 0.0)
                 throughput *= scatterSample.f / scatterSample.pdf;
             else

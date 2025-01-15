@@ -371,11 +371,11 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
             right = t;
         }
 
-        if (dist1 < FarPlane)
+        /*if (dist1 < FarPlane)
         {
             hitFound = true;
             hit.distance = dist1;
-        }
+        }*/
 
         if (dist1 == FarPlane)
         {

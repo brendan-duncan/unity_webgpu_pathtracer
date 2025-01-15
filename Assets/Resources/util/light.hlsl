@@ -78,7 +78,7 @@ void SampleOneLight(in Light light, in float3 scatterPos, inout LightSampleRec l
     }
 }
 
-float3 EvalLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, in Light light, in float3 scatterPos, in LightSampleRec lightSample)
+float3 EvalLight(in Ray ray, in RayHit hit, in BRDFMaterial mat, in Light light, in float3 scatterPos, in LightSampleRec lightSample)
 {
     float3 Ld = 0.0f;
 
@@ -108,7 +108,7 @@ float3 EvalLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, in Light ligh
     if (!inShadow)
     {
         float pdf;
-        float3 f = DisneyEval(hit, mat, -ray.direction, hit.normal, lightSample.direction, pdf);
+        float3 f = EvalBRDF(hit, mat, -ray.direction, hit.normal, lightSample.direction, pdf);
         float lightPdf = 1.0f;
         if (lightSample.pdf > 0.0f)
             lightPdf = lightSample.pdf;
@@ -119,7 +119,7 @@ float3 EvalLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, in Light ligh
     return Ld;
 }
 
-float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint rngState)
+float3 DirectLight(in Ray ray, in RayHit hit, in BRDFMaterial mat, inout uint rngState)
 {
     float3 Ld = 0.0f;
     float3 scatterPos = hit.position + hit.normal * EPSILON;
@@ -136,7 +136,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint 
         bool inShadow = ShadowRayIntersect(shadowRay);
         if (!inShadow)
         {
-            scatterSample.f = DisneyEval(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
+            scatterSample.f = EvalBRDF(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
             if (scatterSample.pdf > 0.0)
             {
                 float misWeight = PowerHeuristic(lightPdf, scatterSample.pdf);
@@ -152,7 +152,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint 
         bool inShadow = ShadowRayIntersect(shadowRay);
         if (!inShadow)
         {
-            scatterSample.f = DisneyEval(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
+            scatterSample.f = EvalBRDF(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
             if (scatterSample.pdf > 0.0)
             {
                 float misWeight = PowerHeuristic(lightPdf, scatterSample.pdf);
@@ -172,7 +172,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint 
         bool inShadow = ShadowRayIntersect(shadowRay);
         if (!inShadow)
         {
-            scatterSample.f = DisneyEval(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
+            scatterSample.f = EvalBRDF(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
             if (scatterSample.pdf > 0.0)
             {
                 float misWeight = PowerHeuristic(lightPdf, scatterSample.pdf);
@@ -195,7 +195,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in DisneyMaterial mat, inout uint 
         bool inShadow = ShadowRayIntersect(shadowRay);
         if (!inShadow)
         {
-            scatterSample.f = DisneyEval(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
+            scatterSample.f = EvalBRDF(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
             if (scatterSample.pdf > 0.0)
             {
                 float misWeight = PowerHeuristic(lightPdf, scatterSample.pdf);

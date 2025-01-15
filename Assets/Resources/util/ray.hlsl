@@ -20,7 +20,7 @@ struct RayHit
     float3 normal;
     float3 tangent;
     float2 uv;
-    Material material;
+    MaterialData material;
     float eta;
     float3 ffnormal;
 };
