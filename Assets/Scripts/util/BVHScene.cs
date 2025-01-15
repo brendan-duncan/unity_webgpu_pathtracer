@@ -697,6 +697,13 @@ public class BVHScene
         _gpuInstancesBuffer.SetData(_gpuInstances);
         _gpuInstanceCount = _gpuInstances.Length;
 
+        for (int i = 0; i < _blasInstances.Length; ++i)
+        {
+            BLASInstance instance = _blasInstances[i];
+            Debug.Log($"BLAS Instance {i} blas:{instance.blasIndex}\n{instance.localToWorld}\n{instance.aabbMin} x {instance.aabbMax}");
+        }
+        Debug.Log("-------");
+
         NativeArray<BLASInstance> blasInstancesPtr = new(_blasInstances, Allocator.Persistent);
         IntPtr blasInstancesCPtr = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(blasInstancesPtr);
 
