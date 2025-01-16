@@ -2,7 +2,7 @@
 #define __UNITY_PATHTRACER_BVH_HLSL__
 
 #include "common.hlsl"
-#include "material.hlsl"
+#include "material_functions.hlsl"
 #include "random.hlsl"
 #include "ray.hlsl"
 #include "triangle_attributes.hlsl"
@@ -259,9 +259,9 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
         hit.position = ray.origin + hit.distance * ray.direction;
-        hit.material = Materials[triAttr.materialIndex];
         hit.tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
+        hit.material = GetMaterial(Materials[triAttr.materialIndex], ray, hit);
     }
 
     return hit;

@@ -4,7 +4,7 @@
 #include "common.hlsl"
 #include "brdf.hlsl"
 #include "light.hlsl"
-#include "material.hlsl"
+#include "material_functions.hlsl"
 #include "ray.hlsl"
 #include "sky.hlsl"
 
@@ -40,7 +40,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
             break;
         }
 
-        BRDFMaterial material = GetMaterial(ray, hit);
+        Material material = hit.material;
 
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled
         radiance += material.emission * throughput;

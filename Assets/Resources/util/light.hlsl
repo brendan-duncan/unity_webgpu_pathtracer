@@ -78,7 +78,7 @@ void SampleOneLight(in Light light, in float3 scatterPos, inout LightSampleRec l
     }
 }
 
-float3 EvalLight(in Ray ray, in RayHit hit, in BRDFMaterial mat, in Light light, in float3 scatterPos, in LightSampleRec lightSample)
+float3 EvalLight(in Ray ray, in RayHit hit, in Material mat, in Light light, in float3 scatterPos, in LightSampleRec lightSample)
 {
     float3 Ld = 0.0f;
 
@@ -119,7 +119,7 @@ float3 EvalLight(in Ray ray, in RayHit hit, in BRDFMaterial mat, in Light light,
     return Ld;
 }
 
-float3 DirectLight(in Ray ray, in RayHit hit, in BRDFMaterial mat, inout uint rngState)
+float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngState)
 {
     float3 Ld = 0.0f;
     float3 scatterPos = hit.position + hit.normal * EPSILON;

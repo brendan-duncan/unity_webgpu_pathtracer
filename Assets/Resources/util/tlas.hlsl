@@ -263,9 +263,9 @@ RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
         hit.position = ray.origin + hit.distance * ray.direction;
-        hit.material = Materials[instance.materialIndex];
         hit.tangent = normalize(mul(instance.localToWorld, float4(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2), 0.0f)).xyz);
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
+        hit.material = GetMaterial(Materials[triAttr.materialIndex], ray, hit);
     }
 
     return hit;
