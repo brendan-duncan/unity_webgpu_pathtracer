@@ -1,6 +1,6 @@
 // When USE_TLAS is defined, it will use TLAS acceleration structures supporting BVH instancing.
 // When USE_TLAS is not defined, it will use a single BVH acceleration structure for the entire scene.
-#define USE_TLAS
+//#define USE_TLAS
 
 using System;
 using System.Collections.Generic;
@@ -10,6 +10,8 @@ using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Experimental.Rendering;
+
+using System.Text;
 
 #if USE_TLAS
 // Instance data passed to the GPU for rendering.
@@ -495,9 +497,12 @@ public class BVHScene
             int materialIndex = _materials.IndexOf(material);
 #endif
 
-            Debug.Log($"Processing Mesh {meshIndex + 1}/{_meshes.Count} Triangles: {triangleCount:n0} Material: {materialIndex}");
+            Debug.Log($"Processing Mesh {meshIndex + 1}/{_meshes.Count} Triangles: {triangleCount:n0}  Material: {materialIndex}");
 
+            mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
             GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
+
+            mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
             GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
 
             // Determine where in the Unity vertex buffer each vertex attribute is
@@ -619,7 +624,6 @@ public class BVHScene
             Debug.Log($"BVH Nodes Size: {nodesSize:n0} Triangles Size: {trisSize:n0}");
         }
 #endif
-
         _bvhNodesBuffer = new ComputeBuffer(totalNodeSize / 4, 4);
         _bvhTrianglesBuffer = new ComputeBuffer(totalTriSize / 4, 4);
 
