@@ -2,7 +2,7 @@
 #define __UNITY_PATHTRACER_BVH_HLSL__
 
 #include "common.hlsl"
-#include "material_functions.hlsl"
+#include "material.hlsl"
 #include "random.hlsl"
 #include "ray.hlsl"
 #include "triangle_attributes.hlsl"

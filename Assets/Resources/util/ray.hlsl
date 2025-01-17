@@ -1,7 +1,7 @@
 #ifndef __UNITY_PATHTRACER_RAY_HLSL__
 #define __UNITY_PATHTRACER_RAY_HLSL__
 
-#include "material.hlsl"
+#include "common.hlsl"
 
 struct Ray
 {

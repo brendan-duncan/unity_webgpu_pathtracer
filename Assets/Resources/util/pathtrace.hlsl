@@ -4,7 +4,7 @@
 #include "common.hlsl"
 #include "brdf.hlsl"
 #include "light.hlsl"
-#include "material_functions.hlsl"
+#include "material.hlsl"
 #include "ray.hlsl"
 #include "sky.hlsl"
 

@@ -76,7 +76,7 @@ public class BVHScene
     const int kBLASInstanceSize = 192; // 160 + 32 padding for 64-bit alignment
     const int kBVHNodeSize = 80;
     const int kBVHTriSize = 16;
-    // Number of float values in material.hlsl
+    // Number of float values in MaterialData in common.hlsl
     const int kMaterialSize = 32;
     const int kTextureOffset = 24;
 

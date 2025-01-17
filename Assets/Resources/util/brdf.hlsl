@@ -2,7 +2,6 @@
 #define __UNITY_PATHTRACER_BRDF_HLSL__
 
 #include "common.hlsl"
-#include "material.hlsl"
 #include "random.hlsl"
 #include "ray.hlsl"
 #include "sampling.hlsl"
