@@ -2,6 +2,7 @@
 #define __UNITY_PATHTRACER_BVH_HLSL__
 
 #include "common.hlsl"
+#include "material.hlsl"
 #include "random.hlsl"
 #include "ray.hlsl"
 #include "triangle_attributes.hlsl"
@@ -264,7 +265,7 @@ RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
         hit.position = ray.origin + hit.distance * ray.direction;
         hit.tangent = normalize(mul(instance.localToWorld, float4(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2), 0.0f)).xyz);
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
-        hit.material = GetMaterial(Materials[triAttr.materialIndex], ray, hit);
+        hit.material = GetMaterial(Materials[instance.materialIndex], ray, hit);
     }
 
     return hit;
@@ -291,7 +292,6 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
 {
     RayHit hit = (RayHit)0;
     hit.distance = FarPlane;
-    bool hitFound = false;
 
     const float3 O = ray.origin;
     const float3 rD = rcp(ray.direction);
@@ -307,9 +307,7 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
         {
             const uint firstBlas = asuint(TLASNodes[node].rmaxFirstBlas.w);
 
-            /*if (firstBlas == 3)
-            {
-                hitFound = true;
+            /*{
                 hit.distance = 1.0f;
             }*/
 
@@ -328,7 +326,6 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
                 if (blasHit.distance < hit.distance)
                 {
                     hit = blasHit;
-                    hitFound = true;
                 }
             }
 
@@ -390,9 +387,6 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
                 stack[stackPtr++] = right;
         }
     }
-
-    if (!hitFound)
-        hit.distance = FarPlane;
 
     return hit;
 }
