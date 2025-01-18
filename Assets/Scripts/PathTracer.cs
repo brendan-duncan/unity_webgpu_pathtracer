@@ -352,11 +352,11 @@ public class PathTracer : MonoBehaviour
         // Overwrite image with output from raytracer, applying tonemapping
         _cmd.Blit(_outputRT[_currentRT], destination, _presentationMaterial);
 
-        if (_currentSample <= maxSamples)
-        {
-            _currentRT = 1 - _currentRT;
+        if (_currentSample < maxSamples)
             _currentSample += Math.Max(1, samplesPerPass);
-        }
+
+        if (_currentSample < maxSamples)
+            _currentRT = 1 - _currentRT;
 
         Graphics.ExecuteCommandBuffer(_cmd);
         _cmd.Clear();
