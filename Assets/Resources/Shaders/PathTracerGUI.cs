@@ -1,9 +1,10 @@
 using System;
 using UnityEngine;
-using UnityEditor;
 
 #if UNITY_EDITOR
-public class DisneyBRDFGUI : ShaderGUI
+using UnityEditor;
+
+public class PathTracerGUI : ShaderGUI
 {
     public override void OnGUI(MaterialEditor materialEditor, MaterialProperty[] properties)
     {

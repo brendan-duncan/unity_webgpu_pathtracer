@@ -17,39 +17,45 @@
 #include "util/random.hlsl"
 #include "util/ray.hlsl"
 
+uint RngSeedRoot;
 int SamplesPerPass;
 
 [numthreads(128, 1, 1)]
 void PathTracer(uint3 id : SV_DispatchThreadID)
 {
-    const uint pixelIndex = id.x;
+    const uint pixelIndex = min(id.x, OutputWidth * OutputHeight - 1);
     const uint pixelX = pixelIndex % OutputWidth;
     const uint pixelY = pixelIndex / OutputWidth;
-    if (pixelX >= OutputWidth || pixelY >= OutputHeight)
-        return;
-
-    float2 pixelCoords = float2(pixelX, pixelY);
-
-    const int numSamples = max(1, SamplesPerPass);
-    float fSamples = (float)numSamples;
-    uint rngState = RNGStateBuffer[pixelIndex];
-
-    float3 color = 0.0f;
-    for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
+    if (pixelX < OutputWidth && pixelY < OutputHeight)
     {
-        float2 randomSample = float2(RandomFloat(rngState), RandomFloat(rngState));
+        float2 pixelCoords = float2(pixelX, pixelY);
 
-        float2 pixelCoordsSample = pixelCoords + randomSample;
+        const int numSamples = max(1, SamplesPerPass);
+        float fSamples = (float)numSamples;
+        uint rngState = pixelIndex * (CurrentSample + 1) + RngSeedRoot;
 
-        Ray ray = GetScreenRay(pixelCoordsSample, rngState);
+        float3 color = 0.0f;
+        int sampleIndex = 0;
+        for (; sampleIndex < numSamples; ++sampleIndex)
+        {
+            float2 randomSample = float2(RandomFloat(rngState), RandomFloat(rngState));
 
-        color += PathTrace(ray, rngState);
+            float2 pixelCoordsSample = pixelCoords + randomSample;
+
+            Ray ray = GetScreenRay(pixelCoordsSample, rngState);
+
+            color += PathTrace(ray, rngState);
+        }
+
+        if (CurrentSample == 0)
+        {
+            Output[pixelCoords] = float4(color, 1.0f);
+        }
+        else
+        {
+            float4 currentColor = AccumulatedOutput[pixelCoords];
+            float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + fSamples);
+            Output[pixelCoords] = float4(accumilatedColor, 1.0f);
+        }
     }
-
-    float4 currentColor = AccumulatedOutput[pixelCoords];
-    float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + fSamples);
-
-    Output[pixelCoords] = float4(accumilatedColor, 1.0f);
-
-    RNGStateBuffer[pixelIndex] = rngState;
 }

@@ -35,7 +35,6 @@ struct TLASNode
     float4 rmaxFirstBlas;
 };
 
-bool BackfaceCulling;
 uint TLASInstanceCount;
 StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;
@@ -82,35 +81,15 @@ void IntersectTriangle(int triAddr, const Ray ray, inout RayHit hit)
                 {
                     uint triIndex = asuint(BVHTris[triAddr + 2].w);
                     float2 barycentric = float2(u, v);
-                    TriangleAttributes triAttr = TriangleAttributesBuffer[triIndex];
-                    float3 normal = InterpolateAttribute(barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2);
-                    // Use the transposed inverse to transform the normal to world space
-                    if (!BackfaceCulling)
-                    {
-                        hit.normal = normal;
-                        hit.barycentric = barycentric;
-                        hit.triAddr = triAddr;
-                        hit.triIndex = triIndex;
-                        hit.distance = d;
-                    }
-                    else
-                    {
-                        // Skip the back face of the triangle
-                        if (dot(normal, ray.direction) < 0.0f)
-                        {
-                            hit.normal = normal;
-                            hit.barycentric = barycentric;
-                            hit.triAddr = triAddr;
-                            hit.triIndex = triIndex;
-                            hit.distance = d;
-                        }
-                    }
+                    hit.barycentric = barycentric;
+                    hit.triAddr = triAddr;
+                    hit.triIndex = triIndex;
+                    hit.distance = d;
                 }
             }
         }
     }
 }
-
 
 float3 GetNodeInvDir(float n0w, float3 invDir)
 {
@@ -258,8 +237,10 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
     if (!isShadowRay && hit.distance < FarPlane)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
+
         hit.position = ray.origin + hit.distance * ray.direction;
         hit.tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
+        hit.normal = InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2);
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
         hit.material = GetMaterial(Materials[triAttr.materialIndex], ray, hit);
     }

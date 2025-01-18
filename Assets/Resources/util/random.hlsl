@@ -1,11 +1,9 @@
 #ifndef __UNITY_PATHTRACER_RANDOM_HLSL__
 #define __UNITY_PATHTRACER_RANDOM_HLSL__
 
-RWStructuredBuffer<uint> RNGStateBuffer;
-
+// PCG random number generator
 void rngNextInt(inout uint state)
 {
-    // PCG random number generator
     uint oldState = state + 747796405u + 2891336453u;
     uint word = ((oldState >> ((oldState >> 28u) + 4u)) ^ oldState) * 277803737u;
     state = (word >> 22u) ^ word;
@@ -38,11 +36,6 @@ float3 RandomCosineHemisphere(float3 normal, inout uint state)
     // See https://ameye.dev/notes/sampling-the-hemisphere/
 	float theta = acos(sqrt(RandomFloat(state)));
 	float phi = 2.0f * PI * RandomFloat(state);
-
-    //float3 X = 0.0f;
-    //float3 Y = 0.0f;
-    //GetONB(normal, X, Y);
-	//return sin(theta) * (cos(phi) * X + sin(phi) * Y + cos(theta) * normal);
     float3x3 onb = GetONB(normal);
     return sin(theta) * (cos(phi) * onb[0] + sin(phi) * onb[1] + cos(theta) * onb[2]);
 }

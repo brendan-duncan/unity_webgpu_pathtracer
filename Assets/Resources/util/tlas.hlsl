@@ -1,5 +1,5 @@
-#ifndef __UNITY_PATHTRACER_BVH_HLSL__
-#define __UNITY_PATHTRACER_BVH_HLSL__
+#ifndef __UNITY_PATHTRACER_TLAS_HLSL__
+#define __UNITY_PATHTRACER_TLAS_HLSL__
 
 #include "common.hlsl"
 #include "material.hlsl"
@@ -37,14 +37,13 @@ struct TLASNode
 
 bool BackfaceCulling;
 uint GPUInstanceCount;
+
+StructuredBuffer<TLASNode> TLASNodes;
+StructuredBuffer<GPUInstance> GPUInstances;
 StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;
 StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
-StructuredBuffer<GPUInstance> GPUInstances;
-StructuredBuffer<TLASNode> TLASNodes;
-
-// Stack size for BVH traversal
 #define BVH_STACK_SIZE 32
 
 float2 InterpolateAttribute(float2 barycentric, float2 attr0, float2 attr1, float2 attr2)
@@ -85,30 +84,10 @@ void IntersectTriangle(const GPUInstance instance, int triAddr, const Ray ray, i
                 {
                     uint triIndex = instance.triAttributeOffset + asuint(BVHTris[triAddr + 2].w);
                     float2 barycentric = float2(u, v);
-                    TriangleAttributes triAttr = TriangleAttributesBuffer[triIndex];
-                    float3 normal = InterpolateAttribute(barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2);
-                    // Use the transposed inverse to transform the normal to world space
-                    normal = normalize(mul(float4(normal, 0.0f), instance.worldToLocal).xyz);
-                    if (!BackfaceCulling)
-                    {
-                        hit.normal = normal;
-                        hit.barycentric = barycentric;
-                        hit.triAddr = triAddr;
-                        hit.triIndex = triIndex;
-                        hit.distance = d;
-                    }
-                    else
-                    {
-                        // Skip the back face of the triangle
-                        if (dot(normal, ray.direction) < 0.0f)
-                        {
-                            hit.normal = normal;
-                            hit.barycentric = barycentric;
-                            hit.triAddr = triAddr;
-                            hit.triIndex = triIndex;
-                            hit.distance = d;
-                        }
-                    }
+                    hit.barycentric = barycentric;
+                    hit.triAddr = triAddr;
+                    hit.triIndex = triIndex;
+                    hit.distance = d;
                 }
             }
         }
@@ -262,9 +241,19 @@ RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
     if (!isShadowRay && hit.distance < FarPlane)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
+
         hit.position = ray.origin + hit.distance * ray.direction;
-        hit.tangent = normalize(mul(instance.localToWorld, float4(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2), 0.0f)).xyz);
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
+
+        float3 normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+        // Use the transposed inverse to transform the normal to world space
+        normal = normalize(mul(float4(normal, 0.0f), instance.worldToLocal).xyz);
+        hit.normal = normal;
+
+        float3 tangent = normalize(InterpolateAttribute(barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
+        tangent = normalize(mul(float4(tangent, 0.0f), instance.worldToLocal).xyz);
+        hit.tangent = tangent;
+
         hit.material = GetMaterial(Materials[instance.materialIndex], ray, hit);
     }
 
@@ -303,94 +292,94 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
     const float3 O = ray.origin;
     const float3 rD = rcp(ray.direction);
 
-    uint node = 0;
+    uint nodeIndex = 0;
     uint stack[BVH_STACK_SIZE];
     uint stackPtr = 0;
-    while (true)
+    bool inLoop = true;
+    while (inLoop)
     {
-        // fetch the node
-        const uint instanceCount = asuint(TLASNodes[node].rminInstanceCount.w);
+        TLASNode node = TLASNodes[nodeIndex];
+        const uint instanceCount = asuint(node.rminInstanceCount.w);
         if (instanceCount > 0)
         {
-            const uint firstInstance = asuint(TLASNodes[node].rmaxFirstInstance.w);
+            float w = node.rmaxFirstInstance.w;
+            const uint firstInstance = asuint(w);
+            //const uint firstInstance = 1;
 
-            if (firstInstance == 0)
-                hit.distance = 1.0f;
-            
-            if (firstInstance == 1)
+            // Setting this will show the bounding box of the TLAS is being intersected.
+            //hit.distance = 1.0;
+
+            // This will show the instances can be intersected.
+            //RayIntersectTLAS_Instance(GPUInstances[0], ray, isShadowRay, hit);
+            //RayIntersectTLAS_Instance(GPUInstances[1], ray, isShadowRay, hit);
+            //RayIntersectTLAS_Instance(GPUInstances[2], ray, isShadowRay, hit);
+
+            // process leaf node
+            for (uint i = 0; i < instanceCount; i++)
             {
-                const GPUInstance instance = GPUInstances[0];
+                const uint instanceIndex = firstInstance + i;
+                const GPUInstance instance = GPUInstances[instanceIndex];
                 RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
             }
 
-            // process leaf node
-            /*for (uint i = 0; i < blasCount; i++)
-            {
-                const uint instanceIndex = firstBlas + i;
-                if (instanceIndex == 0)
-                {
-                //const GPUInstance instance = GPUInstances[instanceIndex];
-                const GPUInstance instance = GPUInstances[0];
-                RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
-                }
-            }*/
-
-            if (stackPtr == 0)
-                break;
-
-            node = stack[--stackPtr];
-            continue;
-        }
-
-        const float3 lmin = TLASNodes[node].lminLeft.xyz;
-        uint left = asuint(TLASNodes[node].lminLeft.w);
-        const float3 lmax = TLASNodes[node].lmaxRight.xyz;
-        uint right = asuint(TLASNodes[node].lmaxRight.w);
-        const float3 rmin = TLASNodes[node].rminInstanceCount.xyz; // rmin + blasCount;
-        const float3 rmax = TLASNodes[node].rmaxFirstInstance.xyz; // rmax + firstBlas;
-
-        // child AABB intersection tests
-        const float3 t1a = (lmin - O) * rD;
-        const float3 t2a = (lmax - O) * rD;
-        const float3 t1b = (rmin - O) * rD;
-        const float3 t2b = (rmax - O) * rD;
-
-        const float3 minta = min3(t1a, t2a);
-        const float3 maxta = max3(t1a, t2a);
-        const float3 mintb = min3(t1b, t2b);
-        const float3 maxtb = max3(t1b, t2b);
-
-        const float tmina = max(max(max(minta.x, minta.y), minta.z), 0);
-        const float tmaxa = min(min(min(maxta.x, maxta.y), maxta.z), hit.distance);
-
-        const float tminb = max(max(max(mintb.x, mintb.y), mintb.z), 0);
-        const float tmaxb = min(min(min(maxtb.x, maxtb.y), maxtb.z), hit.distance);
-
-        float dist1 = select(tmina, FarPlane, tmina > tmaxa);
-        float dist2 = select(tminb, FarPlane, tminb > tmaxb);
-
-        // traverse nearest child first
-        if (dist1 > dist2)
-        {
-            float h = dist1;
-            dist1 = dist2;
-            dist2 = h;
-            uint t = left;
-            left = right;
-            right = t;
-        }
-
-        if (dist1 == FarPlane)
-        {
-            if (stackPtr == 0)
-                break;
-            node = stack[--stackPtr];
+            if (stackPtr > 0)
+                nodeIndex = stack[--stackPtr];
+            else
+                inLoop = false;
         }
         else
         {
-            node = left;
-            if (dist2 != FarPlane)
-                stack[stackPtr++] = right;
+            const float3 lmin = node.lminLeft.xyz;
+            uint left = asuint(node.lminLeft.w);
+            const float3 lmax = node.lmaxRight.xyz;
+            uint right = asuint(node.lmaxRight.w);
+            const float3 rmin = node.rminInstanceCount.xyz;
+            const float3 rmax = node.rmaxFirstInstance.xyz;
+
+            // child AABB intersection tests
+            const float3 t1a = (lmin - O) * rD;
+            const float3 t2a = (lmax - O) * rD;
+            const float3 t1b = (rmin - O) * rD;
+            const float3 t2b = (rmax - O) * rD;
+
+            const float3 minta = min3(t1a, t2a);
+            const float3 maxta = max3(t1a, t2a);
+            const float3 mintb = min3(t1b, t2b);
+            const float3 maxtb = max3(t1b, t2b);
+
+            const float tmina = max(max(max(minta.x, minta.y), minta.z), 0);
+            const float tmaxa = min(min(min(maxta.x, maxta.y), maxta.z), hit.distance);
+
+            const float tminb = max(max(max(mintb.x, mintb.y), mintb.z), 0);
+            const float tmaxb = min(min(min(maxtb.x, maxtb.y), maxtb.z), hit.distance);
+
+            float dist1 = select(tmina, FarPlane, tmina > tmaxa);
+            float dist2 = select(tminb, FarPlane, tminb > tmaxb);
+
+            // traverse nearest child first
+            if (dist1 > dist2)
+            {
+                float h = dist1;
+                dist1 = dist2;
+                dist2 = h;
+                uint t = left;
+                left = right;
+                right = t;
+            }
+
+            if (dist1 == FarPlane)
+            {
+                if (stackPtr > 0)
+                    nodeIndex = stack[--stackPtr];
+                else
+                    inLoop = false;
+            }
+            else
+            {
+                nodeIndex = left;
+                if (dist2 != FarPlane)
+                    stack[stackPtr++] = right;
+            }
         }
     }
 
@@ -399,8 +388,8 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
 
 RayHit RayIntersect(in Ray ray)
 {
-    //return RayIntersectTLAS_NoAccel(ray, false);
-    return RayIntersectTLAS(ray, false);
+    return RayIntersectTLAS_NoAccel(ray, false);
+    //return RayIntersectTLAS(ray, false);
 }
 
 bool ShadowRayIntersect(in Ray ray)
@@ -409,4 +398,4 @@ bool ShadowRayIntersect(in Ray ray)
     return hit.distance < FarPlane;
 }
 
-#endif // __UNITY_PATHTRACER_BVH_HLSL__
+#endif // __UNITY_PATHTRACER_TLAS_HLSL__

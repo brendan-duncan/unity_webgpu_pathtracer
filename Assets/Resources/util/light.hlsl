@@ -209,7 +209,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
     }*/
 
 #if HAS_LIGHTS
-    LightSampleRec lightSample = { (float3)0.0f, (float3)0.0f, (float3)0.0f, 0.0f, 0.0f };
+    LightSampleRec lightSample = (LightSampleRec)0;
 
     // Pick a light to sample
     int lightIndex = int(RandomFloat(rngState) * float(LightCount));

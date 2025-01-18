@@ -1,4 +1,4 @@
-Shader "PathTracer/DisneyBRDF"
+Shader "PathTracer/PathTracer"
 {
     Properties
     {
@@ -418,5 +418,5 @@ Shader "PathTracer/DisneyBRDF"
         }
     }
 
-    CustomEditor "DisneyBRDFGUI"
+    CustomEditor "PathTracerGUI"
 }
