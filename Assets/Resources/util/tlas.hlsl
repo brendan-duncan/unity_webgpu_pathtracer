@@ -9,12 +9,12 @@
 
 struct GPUInstance
 {
+    float4x4 localToWorld;
+    float4x4 worldToLocal;
     int bvhOffset;
     int triOffset;
     int triAttributeOffset;
     int materialIndex;
-    float4x4 localToWorld;
-    float4x4 worldToLocal;
 };
 
 // Nodes in CWBVH format.
@@ -31,8 +31,8 @@ struct TLASNode
 {
     float4 lminLeft;
     float4 lmaxRight;
-    float4 rminBlasCount;
-    float4 rmaxFirstBlas;
+    float4 rminInstanceCount;
+    float4 rmaxFirstInstance;
 };
 
 bool BackfaceCulling;
@@ -271,6 +271,17 @@ RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
     return hit;
 }
 
+void RayIntersectTLAS_Instance(const GPUInstance instance, const Ray ray, bool isShadowRay, inout RayHit hit)
+{
+    const float4x4 worldToLocal = instance.worldToLocal;
+    const float3 lO = mul(worldToLocal, float4(ray.origin, 1.0f)).xyz;
+    const float3 lD = mul(worldToLocal, float4(ray.direction, 0.0f)).xyz;
+    Ray rayLocal = { lO, lD };
+    RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
+    if (blasHit.distance < hit.distance)
+        hit = blasHit;
+}
+
 RayHit RayIntersectTLAS_NoAccel(const Ray ray, bool isShadowRay)
 {
     RayHit hit = (RayHit)0;
@@ -279,11 +290,7 @@ RayHit RayIntersectTLAS_NoAccel(const Ray ray, bool isShadowRay)
     for (uint i = 0; i < GPUInstanceCount; i++)
     {
         const GPUInstance instance = GPUInstances[i];
-        const float4x4 worldToLocal = instance.worldToLocal;
-        Ray rayLocal = {mul(worldToLocal, float4(ray.origin, 1.0f)).xyz, mul(worldToLocal, float4(ray.direction, 0.0f)).xyz};
-        RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
-        if (blasHit.distance < hit.distance)
-            hit = blasHit;
+        RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
     }
     return hit;
 }
@@ -302,32 +309,31 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
     while (true)
     {
         // fetch the node
-        const uint blasCount = asuint(TLASNodes[node].rminBlasCount.w);
-        if (blasCount > 0)
+        const uint instanceCount = asuint(TLASNodes[node].rminInstanceCount.w);
+        if (instanceCount > 0)
         {
-            const uint firstBlas = asuint(TLASNodes[node].rmaxFirstBlas.w);
+            const uint firstInstance = asuint(TLASNodes[node].rmaxFirstInstance.w);
 
-            /*{
+            if (firstInstance == 0)
                 hit.distance = 1.0f;
-            }*/
+            
+            if (firstInstance == 1)
+            {
+                const GPUInstance instance = GPUInstances[0];
+                RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
+            }
 
             // process leaf node
-            for (uint i = 0; i < blasCount; i++)
+            /*for (uint i = 0; i < blasCount; i++)
             {
                 const uint instanceIndex = firstBlas + i;
-                const GPUInstance instance = GPUInstances[instanceIndex];
-                const float4x4 worldToLocal = instance.worldToLocal;
-
-                const float3 lO = mul(worldToLocal, float4(O, 1.0f)).xyz;
-                const float3 lD = mul(worldToLocal, float4(ray.direction, 0.0f)).xyz;
-
-                Ray rayLocal = { lO, lD };
-                RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
-                if (blasHit.distance < hit.distance)
+                if (instanceIndex == 0)
                 {
-                    hit = blasHit;
+                //const GPUInstance instance = GPUInstances[instanceIndex];
+                const GPUInstance instance = GPUInstances[0];
+                RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
                 }
-            }
+            }*/
 
             if (stackPtr == 0)
                 break;
@@ -340,8 +346,8 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
         uint left = asuint(TLASNodes[node].lminLeft.w);
         const float3 lmax = TLASNodes[node].lmaxRight.xyz;
         uint right = asuint(TLASNodes[node].lmaxRight.w);
-        const float3 rmin = TLASNodes[node].rminBlasCount.xyz; // rmin + blasCount;
-        const float3 rmax = TLASNodes[node].rmaxFirstBlas.xyz; // rmax + firstBlas;
+        const float3 rmin = TLASNodes[node].rminInstanceCount.xyz; // rmin + blasCount;
+        const float3 rmax = TLASNodes[node].rmaxFirstInstance.xyz; // rmax + firstBlas;
 
         // child AABB intersection tests
         const float3 t1a = (lmin - O) * rD;

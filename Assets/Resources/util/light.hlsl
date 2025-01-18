@@ -16,10 +16,13 @@ struct Light
 {
     float3 position;
     float type;
+
     float3 emission;
     float range;
+
     float3 u;
     float area;
+
     float3 v;
     float spotAngle;
 };
@@ -123,7 +126,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
 {
     float3 Ld = 0.0f;
     float3 scatterPos = hit.position + hit.normal * EPSILON;
-    ScatterSampleRec scatterSample = { (float3)0.0f, (float3)0.0f, 0.0f };
+    ScatterSampleRec scatterSample = (ScatterSampleRec)0;
 
     /*if (EnvironmentMode == 0)
     {

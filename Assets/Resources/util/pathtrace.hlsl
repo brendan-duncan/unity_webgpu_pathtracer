@@ -13,8 +13,8 @@ float3 PathTrace(Ray ray, inout uint rngState)
     float3 radiance = 0.0f;
     float3 throughput = 1.0f;
 
-    LightSampleRec lightSample = { (float3)0.0f, (float3)0.0f, (float3)0.0f, 0.0f, 0.0f };
-    ScatterSampleRec scatterSample = { (float3)0.0f, (float3)0.0f, 0.0f };
+    LightSampleRec lightSample = (LightSampleRec)0;
+    ScatterSampleRec scatterSample = (ScatterSampleRec)0;
 
     // For medium tracking
     bool inMedium = false;

@@ -9,12 +9,12 @@
 
 struct BVHInstance
 {
+    float4x4 localToWorld;
+    float4x4 worldToLocal;
     int materialIndex;
     int bvhOffset;
     int triOffset;
     int triAttributeOffset;
-    float4x4 localToWorld;
-    float4x4 worldToLocal;
 };
 
 // Nodes in CWBVH format.

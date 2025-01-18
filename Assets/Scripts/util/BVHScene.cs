@@ -1,6 +1,6 @@
 // When USE_TLAS is defined, it will use TLAS acceleration structures supporting BVH instancing.
 // When USE_TLAS is not defined, it will use a single BVH acceleration structure for the entire scene.
-//#define USE_TLAS
+#define USE_TLAS
 
 using System;
 using System.Collections.Generic;
@@ -18,12 +18,12 @@ using System.Text;
 // This must match GPUInstance in tlas.hlsl.
 struct GPUInstance
 {
+    public Matrix4x4 localToWorld;
+    public Matrix4x4 worldToLocal;
     public int bvhOffset;
     public int triOffset;
     public int triAttributeOffset;
     public int materialIndex;
-    public Matrix4x4 localToWorld;
-    public Matrix4x4 worldToLocal;
 };
 
 // Instance data passed to TinyBVH for building the TLAS.
@@ -36,6 +36,7 @@ struct BLASInstance
     public int blasIndex;
     public Vector3 aabbMax;
     public int padding;
+    // tinybvh::BLASInstance has a 64-byte alignment, so pad to 192 bytes.
     public Vector4 padding2;
     public Vector4 padding3;
 };

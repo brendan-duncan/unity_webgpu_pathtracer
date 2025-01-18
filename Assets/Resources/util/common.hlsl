@@ -19,17 +19,21 @@ Texture2D<float4> AccumulatedOutput;
 struct ScatterSampleRec
 {
     float3 L;
-    float3 f;
     float pdf;
+    float3 f;
+    float padding;
 };
 
 struct LightSampleRec
 {
     float3 normal;
-    float3 emission;
-    float3 direction;
-    float distance;
     float pdf;
+
+    float3 emission;
+    float distance;
+
+    float3 direction;
+    float padding;
 };
 
 struct MaterialData
@@ -79,22 +83,29 @@ struct Material
 {
     float3 baseColor;
     float opacity;
-    float alphaMode;
-    float alphaCutoff;
+
     float3 emission;
+    float alphaMode;
+    
+    float alphaCutoff;
     float anisotropic;
     float metallic;
     float roughness;
+    
     float subsurface;
     float specularTint;
     float sheen;
     float sheenTint;
+    
     float clearcoat;
     float clearcoatRoughness;
     float specTrans;
     float ior;
+    
     float ax;
     float ay;
+    float padding1;
+    float padding2;
     //Medium medium;
 };
 
