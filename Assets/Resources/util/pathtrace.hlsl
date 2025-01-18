@@ -26,7 +26,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
     for (uint rayDepth = 0; ; ++rayDepth)
     {
         RayHit hit = RayIntersect(ray);
-        bool didHit = hit.distance < FarPlane;
+        bool didHit = hit.distance < FAR_PLANE;
 
         if (!didHit)
         {
@@ -43,7 +43,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
         // Test if the normal and tangent are orthogonal to each other.
         /*float3 N = normalize(hit.normal);
         float3 T = normalize(hit.tangent);
-        if (dot(N, T) > 0.0f)
+        if (abs(dot(N, T)) < EPSILON)
         {
             radiance = float3(1.0f, 0.0f, 0.0f);
             break;
@@ -69,7 +69,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
         else
         {
             // Next event estimation
-            radiance += DirectLight(ray, hit, material, rngState) * throughput;
+            //radiance += DirectLight(ray, hit, material, rngState) * throughput;
 
             // Sample BSDF for color and outgoing direction
             scatterSample.f = SampleBRDF(hit, material, -ray.direction, hit.normal, scatterSample.L, scatterSample.pdf, rngState);

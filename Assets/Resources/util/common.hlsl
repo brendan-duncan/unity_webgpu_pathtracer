@@ -7,10 +7,11 @@
 #define TWO_PI     6.28318530717958648
 #define INV_TWO_PI 0.15915494309189533
 #define INV_4_PI   0.07957747154594766
+#define FAR_PLANE  1.0e6f
 
 uint MaxRayBounces;
 uint CurrentSample;
-float FarPlane;
+//float FarPlane;
 uint OutputWidth;
 uint OutputHeight;
 RWTexture2D<float4> Output;
@@ -276,14 +277,14 @@ float3x3 GetONB(float3 z)
     else
     {
         z = normalize(z);
-    #if ONB_METHOD == 0
+#if ONB_METHOD == 0
         // https://www.jcgt.org/published/0006/01/01/paper-lowres.pdf
         float s = select(-1.0f, 1.0f, z.z >= 0.0f);
         float a = -1.0f / (s + z.z);
         float b = z.x * z.y * a;
-        float3 x = float3(1.0f + s * z.x * z.x * a, s * b, -s * z.x);
-        float3 y = float3(b, s + z.y * z.y * a, -z.y);
-    #elif ONB_METHOD == 1
+        float3 x = normalize(float3(1.0f + s * z.x * z.x * a, s * b, -s * z.x));
+        float3 y = normalize(float3(b, s + z.y * z.y * a, -z.y));
+#elif ONB_METHOD == 1
         // MBR frizvald but attempts to deal with z == -1
         // From https://www.shadertoy.com/view/tlVczh
         float k = 1.0f / max(1.0f + z.z, 0.00001);
@@ -292,14 +293,14 @@ float3x3 GetONB(float3 z)
         float b =  z.y * a;
         float c = -z.x * a;
         
-        float3 x = float3(z.z + b, c, -z.x);
-        float3 y = float3(c, 1.0f - b, -z.y);
-    #else
+        float3 x = normalize(float3(z.z + b, c, -z.x));
+        float3 y = normalize(float3(c, 1.0f - b, -z.y));
+#else
         float3 x = select(float3(1.0, 0.0, 0.0), float3(0.0, 1.0, 0.0), abs(z.x) > 0.5f);
         x -= z * dot(x, z);
         x = normalize(x);
         float3 y = cross(z, x);
-    #endif
+#endif
         return float3x3(x, y, z);
     }
 }

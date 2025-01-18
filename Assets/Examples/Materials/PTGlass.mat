@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: DisneyGlass
+  m_Name: PTGlass
   m_Shader: {fileID: 4800000, guid: 350aa7ac46963db4983c1d706aeb0f71, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -98,10 +98,10 @@ Material:
     - anisotropicFactor: 0.15
     - clearCoatFactor: 0
     - clearCoatGloss: 1
-    - ior: 1.1
+    - ior: 1.2
     - metallicFactor: 0.015
     - normalScale: 1
-    - roughnessFactor: 0.041
+    - roughnessFactor: 0.029
     - sheenFactor: 0
     - sheenTint: 0.5
     - specularFactor: 0.5
@@ -112,7 +112,7 @@ Material:
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - baseColorFactor: {r: 0.5110675, g: 0.8962264, b: 0.47770557, a: 0.18039216}
+    - baseColorFactor: {r: 0.7015137, g: 0.95283014, b: 0.6786668, a: 0.28235295}
     - emissiveFactor: {r: 0, g: 0, b: 0, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

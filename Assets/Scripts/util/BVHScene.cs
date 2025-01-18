@@ -500,10 +500,10 @@ public class BVHScene
 
             Debug.Log($"Processing Mesh {meshIndex + 1}/{_meshes.Count} Triangles: {triangleCount:n0}  Material: {materialIndex}");
 
-            mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw;
+            //mesh.vertexBufferTarget |= GraphicsBuffer.Target.Raw; // This is causing WebGPU to be null
             GraphicsBuffer vertexBuffer = mesh.GetVertexBuffer(0);
 
-            mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
+            //mesh.indexBufferTarget |= GraphicsBuffer.Target.Raw;
             GraphicsBuffer indexBuffer = mesh.GetIndexBuffer();
 
             // Determine where in the Unity vertex buffer each vertex attribute is

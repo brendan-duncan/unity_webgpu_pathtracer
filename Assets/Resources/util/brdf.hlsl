@@ -15,6 +15,7 @@ void TintColors(in Material mat, float eta, out float F0, out float3 Csheen, out
         ctint = mat.baseColor / lum;
     else
         ctint = 1.0f;
+
     F0 = (1.0f - eta) / (1.0f + eta);
     F0 *= F0;
 
@@ -119,19 +120,14 @@ float3 EvalClearcoat(in Material mat, float3 V, float3 L, float3 H, out float pd
     }
 }
 
-float3 EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, out float pdf)
+float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, in float3x3 onb, out float pdf)
 {
     pdf = 0.0;
     float3 f = 0.0f;
 
-    float3x3 onb = GetONB(N);
-    // This is causing rendering issues. Perhaps normal and tangent are not orthogonal?
-    //float3 bitangent = normalize(cross(hit.normal, hit.tangent));
-    //float3x3 onb = float3x3(hit.tangent, bitangent, hit.normal);
-
     // Transform to shading space to simplify operations (NDotL = L.z; NDotV = V.z; NDotH = H.z)
-    V = ToLocal(onb, V);
-    L = ToLocal(onb, L);
+    V = normalize(ToLocal(onb, V));
+    L = normalize(ToLocal(onb, L));
 
     float3 H;
     if (L.z > 0.0)
@@ -237,6 +233,15 @@ float3 EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, ou
     return f * abs(L.z);
 }
 
+float3 EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, out float pdf)
+{
+    float3x3 onb = GetONB(N);
+    // This is causing rendering issues. Perhaps normal and tangent are not orthogonal?
+    //float3 bitangent = normalize(cross(hit.normal, hit.tangent));
+    //float3x3 onb = float3x3(hit.tangent, bitangent, hit.normal);
+    return _EvalBRDF(hit, mat, V, N, L, onb, pdf);
+}
+
 float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, out float pdf, inout uint rngState)
 {
     pdf = 0.0;
@@ -333,7 +338,7 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
     L = ToWorld(onb, L);
     V = ToWorld(onb, V);
 
-    return EvalBRDF(hit, mat, V, N, L, pdf);
+    return _EvalBRDF(hit, mat, V, N, L, onb, pdf);
 }
 
 #endif // __UNITY_PATHTRACER_BRDF_HLSL__

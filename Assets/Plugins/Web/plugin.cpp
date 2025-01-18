@@ -108,74 +108,12 @@ tinybvh::BVH_GPU* GetTLAS(int index)
     return nullptr;
 }
 
-void WalkBVHTree(tinybvh::BVH& tlas, tinybvh::BVH::BVHNode* node, int depth)
-{
-    printf("NODE depth:%d bound: %g %g %g x %g %g %g\n", depth, node->aabbMin.x, node->aabbMin.y, node->aabbMin.z, node->aabbMax.x, node->aabbMax.y, node->aabbMax.z);
-    if (node->isLeaf())
-    {
-        for (unsigned int i = 0; i < node->triCount; ++i)
-            printf("** LEAF count:%d blas:%d\n", node->triCount, tlas.triIdx[node->leftFirst + i]);
-    }
-    else
-    {
-        tinybvh::BVH::BVHNode* child1 = &tlas.bvhNode[node->leftFirst];
-        tinybvh::BVH::BVHNode* child2 = &tlas.bvhNode[node->leftFirst + 1];
-        WalkBVHTree(tlas, child1, depth + 1);
-        WalkBVHTree(tlas, child2, depth + 1);
-    }
-}
-
-void WalkBVHTree(tinybvh::BVH_GPU& tlas, tinybvh::BVH_GPU::BVHNode* node, int depth)
-{
-    //printf("NODE depth:%d bound: %g %g %g x %g %g %g\n", depth, node->aabbMin.x, node->aabbMin.y, node->aabbMin.z, node->aabbMax.x, node->aabbMax.y, node->aabbMax.z);
-    if (node->isLeaf())
-    {
-        unsigned int firstTri = node->firstTri;
-        for (unsigned int i = 0; i < node->triCount; ++i)
-            printf("** LEAF depth:%d count:%d blas:%d\n", depth, node->triCount, firstTri + i);
-    }
-    else
-    {
-        tinybvh::BVH_GPU::BVHNode* child1 = &tlas.bvhNode[node->left];
-        printf("NODE depth:%d LEFT:%g %g %g x %g %g %g\n", depth, node->lmin.x, node->lmin.y, node->lmin.z, node->lmax.x, node->lmax.y, node->lmax.z);
-        WalkBVHTree(tlas, child1, depth + 1);
-
-        tinybvh::BVH_GPU::BVHNode* child2 = &tlas.bvhNode[node->right];
-        printf("NODE depth:%d RIGHT:%g %g %g x %g %g %g\n", depth, node->rmin.x, node->rmin.y, node->rmin.z, node->rmax.x, node->rmax.y, node->rmax.z);
-        WalkBVHTree(tlas, child2, depth + 1);
-    }
-}
-
 extern "C" int BuildTLAS(tinybvh::BLASInstance* instances, int instanceCount)
 {
-    for (int i = 0; i < instanceCount; ++i)
-    {
-        const tinybvh::BLASInstance& instance = instances[i];
-        printf("BLAS Instance %d blas:%d padding:%d transform:\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g %g\n%g %g %g x %g %g %g\n--------\n", 
-            i, instance.blasIdx, instance.dummy,
-            instance.transform[0], instance.transform[1], instance.transform[2], instance.transform[3],
-            instance.transform[4], instance.transform[5], instance.transform[6], instance.transform[7],
-            instance.transform[8], instance.transform[9], instance.transform[10], instance.transform[11],
-            instance.transform[12], instance.transform[13], instance.transform[14], instance.transform[15],
-            instance.aabbMin.x, instance.aabbMin.y, instance.aabbMin.z,
-            instance.aabbMax.x, instance.aabbMax.y, instance.aabbMax.z);
-    }
-
     tinybvh::BVH_GPU* tlasGPU = new tinybvh::BVH_GPU();
     // Use the BVH owned by the BVH_GPU so we don't need to keep the seperate BVH around.
     tlasGPU->bvh.Build(instances, instanceCount, nullptr, 0);
     tlasGPU->ConvertFrom(tlasGPU->bvh);
-    //WalkBVHTree(*tlasGPU, &tlasGPU->bvhNode[0], 0);
-    /*printf("-------------------- TLAS Node Data:\n");
-    for (unsigned int i = 0; i < tlasGPU->usedNodes; ++i)
-    {
-        printf("%g %g %g %g\n", tlasGPU->bvhNode[i].lmin.x, tlasGPU->bvhNode[i].lmin.y, tlasGPU->bvhNode[i].lmin.z, (float)tlasGPU->bvhNode[i].left);
-        printf("%g %g %g %g\n", tlasGPU->bvhNode[i].lmax.x, tlasGPU->bvhNode[i].lmax.y, tlasGPU->bvhNode[i].lmax.z, (float)tlasGPU->bvhNode[i].right);
-        printf("%g %g %g %g\n", tlasGPU->bvhNode[i].rmin.x, tlasGPU->bvhNode[i].rmin.y, tlasGPU->bvhNode[i].rmin.z, (float)tlasGPU->bvhNode[i].triCount);
-        printf("%g %g %g %g\n", tlasGPU->bvhNode[i].rmax.x, tlasGPU->bvhNode[i].rmax.y, tlasGPU->bvhNode[i].rmax.z, (float)tlasGPU->bvhNode[i].firstTri);
-    }
-    printf("--------------------\n");*/
-
     return AddTLAS(tlasGPU);
 }
 

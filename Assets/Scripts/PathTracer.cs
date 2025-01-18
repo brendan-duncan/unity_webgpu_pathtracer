@@ -375,7 +375,6 @@ public class PathTracer : MonoBehaviour
         _cmd.SetComputeIntParam(shader, "RngSeedRoot", (int)UnityEngine.Random.Range(0, uint.MaxValue));
         _cmd.SetComputeIntParam(shader, "MaxRayBounces", Math.Max(maxRayBounces, 1));
         _cmd.SetComputeIntParam(shader, "SamplesPerPass", Math.Max(1, samplesPerPass));
-        _cmd.SetComputeFloatParam(shader, "FarPlane", _camera.farClipPlane);
         _cmd.SetComputeIntParam(shader, "OutputWidth", _outputWidth);
         _cmd.SetComputeIntParam(shader, "OutputHeight", _outputHeight);
         _cmd.SetComputeIntParam(shader, "CurrentSample", _currentSample);

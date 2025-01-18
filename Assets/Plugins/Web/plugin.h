@@ -8,7 +8,7 @@
 
 #define TINYBVH_IMPLEMENTATION
 #define TINYBVH_NO_SIMD
-#include "tinybvh/tiny_bvh.h"
+#include "tiny_bvh.h"
 
 extern "C" 
 {

@@ -159,7 +159,7 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
 RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
 {
     RayHit hit = (RayHit)0;
-    hit.distance = FarPlane;
+    hit.distance = FAR_PLANE;
 
     float3 invDir = SafeRcp(ray.direction.xyz);
     uint octinv4 = (7 - ((ray.direction.x < 0 ? 4 : 0) | (ray.direction.y < 0 ? 2 : 0) | (ray.direction.z < 0 ? 1 : 0))) * 0x1010101;
@@ -234,7 +234,7 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
 
     hit.steps = count;
 
-    if (!isShadowRay && hit.distance < FarPlane)
+    if (!isShadowRay && hit.distance < FAR_PLANE)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
 
@@ -256,7 +256,7 @@ RayHit RayIntersect(in Ray ray)
 bool ShadowRayIntersect(in Ray ray)
 {
     RayHit hit = RayIntersectBvh(ray, true);
-    return hit.distance < FarPlane;
+    return hit.distance < FAR_PLANE;
 }
 
 #endif // __UNITY_PATHTRACER_BVH_HLSL__
