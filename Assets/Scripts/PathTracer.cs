@@ -371,6 +371,7 @@ public class PathTracer : MonoBehaviour
         _bvhScene.PrepareShader(_cmd, shader, kernelIndex);
         _cmd.SetComputeMatrixParam(shader, "CamInvProj", _cameraProjectionMatrix.inverse);
         _cmd.SetComputeMatrixParam(shader, "CamToWorld", _cameraToWorldMatrix);
+        // Generate a random seed for each frame
         _cmd.SetComputeIntParam(shader, "RngSeedRoot", (int)UnityEngine.Random.Range(0, uint.MaxValue));
         _cmd.SetComputeIntParam(shader, "MaxRayBounces", Math.Max(maxRayBounces, 1));
         _cmd.SetComputeIntParam(shader, "SamplesPerPass", Math.Max(1, samplesPerPass));

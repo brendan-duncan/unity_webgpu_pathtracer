@@ -17,9 +17,9 @@ float3 PathTrace(Ray ray, inout uint rngState)
     ScatterSampleRec scatterSample = (ScatterSampleRec)0;
 
     // For medium tracking
-    bool inMedium = false;
-    bool mediumSampled = false;
-    bool surfaceScatter = false;
+    //bool inMedium = false;
+    //bool mediumSampled = false;
+    //bool surfaceScatter = false;
 
     const uint maxRayBounces = max(MaxRayBounces, 1u);
 
@@ -40,6 +40,15 @@ float3 PathTrace(Ray ray, inout uint rngState)
             break;
         }
 
+        // Test if the normal and tangent are orthogonal to each other.
+        /*float3 N = normalize(hit.normal);
+        float3 T = normalize(hit.tangent);
+        if (dot(N, T) > 0.0f)
+        {
+            radiance = float3(1.0f, 0.0f, 0.0f);
+            break;
+        }*/
+
         Material material = hit.material;
 
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled
@@ -48,7 +57,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
         if (rayDepth >= maxRayBounces)
             break;
 
-        surfaceScatter = true;
+        //surfaceScatter = true;
 
         // Ignore intersection and continue ray based on alpha test
         if ((material.alphaMode == ALPHA_MODE_MASK && material.opacity < material.alphaCutoff) ||
@@ -64,6 +73,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
 
             // Sample BSDF for color and outgoing direction
             scatterSample.f = SampleBRDF(hit, material, -ray.direction, hit.normal, scatterSample.L, scatterSample.pdf, rngState);
+
             if (scatterSample.pdf > 0.0)
                 throughput *= scatterSample.f / scatterSample.pdf;
             else

@@ -73,10 +73,11 @@ StructuredBuffer<uint> TextureData;
 
 /*struct Medium
 {
-    float type;
-    float density;
     float3 color;
     float anisotropy;
+    float type;
+    float density;
+    float2 padding;
 };*/
 
 struct Material
@@ -86,22 +87,22 @@ struct Material
 
     float3 emission;
     float alphaMode;
-    
+
     float alphaCutoff;
     float anisotropic;
     float metallic;
     float roughness;
-    
+
     float subsurface;
     float specularTint;
     float sheen;
     float sheenTint;
-    
+
     float clearcoat;
     float clearcoatRoughness;
     float specTrans;
     float ior;
-    
+
     float ax;
     float ay;
     float padding1;
@@ -118,6 +119,15 @@ float Luminance(float3 color)
 float Sqr(float x)
 {
     return x * x;
+}
+
+float3 SafeRcp(float3 v)
+{
+    return rcp(v);
+    /*float x = v.x == 0.0f ? 0.0f : 1.0f / v.x;
+    float y = v.y == 0.0f ? 0.0f : 1.0f / v.y;
+    float z = v.z == 0.0f ? 0.0f : 1.0f / v.z;
+    return float3(x, y, z);*/
 }
 
 uint ExtractByte(uint value, uint byteIndex)

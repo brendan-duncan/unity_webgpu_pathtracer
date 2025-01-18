@@ -161,7 +161,7 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
     RayHit hit = (RayHit)0;
     hit.distance = FarPlane;
 
-    float3 invDir = rcp(ray.direction.xyz);
+    float3 invDir = SafeRcp(ray.direction.xyz);
     uint octinv4 = (7 - ((ray.direction.x < 0 ? 4 : 0) | (ray.direction.y < 0 ? 2 : 0) | (ray.direction.z < 0 ? 1 : 0))) * 0x1010101;
 
     uint2 stack[BVH_STACK_SIZE];
@@ -240,7 +240,7 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
 
         hit.position = ray.origin + hit.distance * ray.direction;
         hit.tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
-        hit.normal = InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2);
+        hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
         hit.material = GetMaterial(Materials[triAttr.materialIndex], ray, hit);
     }

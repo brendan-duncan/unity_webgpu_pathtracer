@@ -165,7 +165,7 @@ RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
     RayHit hit = (RayHit)0;
     hit.distance = FarPlane;
 
-    float3 invDir = rcp(ray.direction.xyz);
+    float3 invDir = SafeRcp(ray.direction);
     uint octinv4 = (7 - ((ray.direction.x < 0 ? 4 : 0) | (ray.direction.y < 0 ? 2 : 0) | (ray.direction.z < 0 ? 1 : 0))) * 0x1010101;
 
     uint2 stack[BVH_STACK_SIZE];
@@ -250,7 +250,7 @@ RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
         normal = normalize(mul(float4(normal, 0.0f), instance.worldToLocal).xyz);
         hit.normal = normal;
 
-        float3 tangent = normalize(InterpolateAttribute(barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
+        float3 tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
         tangent = normalize(mul(float4(tangent, 0.0f), instance.worldToLocal).xyz);
         hit.tangent = tangent;
 
@@ -264,7 +264,7 @@ void RayIntersectTLAS_Instance(const GPUInstance instance, const Ray ray, bool i
 {
     const float4x4 worldToLocal = instance.worldToLocal;
     const float3 lO = mul(worldToLocal, float4(ray.origin, 1.0f)).xyz;
-    const float3 lD = mul(worldToLocal, float4(ray.direction, 0.0f)).xyz;
+    const float3 lD = normalize(mul(worldToLocal, float4(ray.direction, 0.0f)).xyz);
     Ray rayLocal = { lO, lD };
     RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
     if (blasHit.distance < hit.distance)
@@ -281,6 +281,7 @@ RayHit RayIntersectTLAS_NoAccel(const Ray ray, bool isShadowRay)
         const GPUInstance instance = GPUInstances[i];
         RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
     }
+
     return hit;
 }
 
@@ -290,7 +291,7 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
     hit.distance = FarPlane;
 
     const float3 O = ray.origin;
-    const float3 rD = rcp(ray.direction);
+    const float3 rD = SafeRcp(ray.direction);
 
     uint nodeIndex = 0;
     uint stack[BVH_STACK_SIZE];

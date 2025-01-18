@@ -31,7 +31,7 @@ void PathTracer(uint3 id : SV_DispatchThreadID)
         float2 pixelCoords = float2(pixelX, pixelY);
 
         const int numSamples = max(1, SamplesPerPass);
-        float fSamples = (float)numSamples;
+        const float fSamples = (float)numSamples;
         uint rngState = pixelIndex * (CurrentSample + 1) + RngSeedRoot;
 
         float3 color = 0.0f;
@@ -47,15 +47,8 @@ void PathTracer(uint3 id : SV_DispatchThreadID)
             color += PathTrace(ray, rngState);
         }
 
-        if (CurrentSample == 0)
-        {
-            Output[pixelCoords] = float4(color, 1.0f);
-        }
-        else
-        {
-            float4 currentColor = AccumulatedOutput[pixelCoords];
-            float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + fSamples);
-            Output[pixelCoords] = float4(accumilatedColor, 1.0f);
-        }
+        float4 currentColor = AccumulatedOutput[pixelCoords];
+        float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + fSamples);
+        Output[pixelCoords] = float4(accumilatedColor, 1.0f);
     }
 }

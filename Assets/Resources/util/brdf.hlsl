@@ -124,8 +124,10 @@ float3 EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, ou
     pdf = 0.0;
     float3 f = 0.0f;
 
-    // TODO: Tangent and bitangent should be calculated from mesh (provided, the mesh has proper uvs)
     float3x3 onb = GetONB(N);
+    // This is causing rendering issues. Perhaps normal and tangent are not orthogonal?
+    //float3 bitangent = normalize(cross(hit.normal, hit.tangent));
+    //float3x3 onb = float3x3(hit.tangent, bitangent, hit.normal);
 
     // Transform to shading space to simplify operations (NDotL = L.z; NDotV = V.z; NDotH = H.z)
     V = ToLocal(onb, V);
@@ -242,10 +244,10 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
     float r1 = RandomFloat(rngState);
     float r2 = RandomFloat(rngState);
 
-    // TODO: Tangent and bitangent should be calculated from mesh (provided, the mesh has proper uvs)
-    //float3 T, B;
-    //Onb(N, T, B);
     float3x3 onb = GetONB(N);
+    // This is causing rendering issues. Perhaps normal and tangent are not orthogonal?
+    //float3 bitangent = normalize(cross(normalize(hit.normal), normalize(hit.tangent)));
+    //float3x3 onb = float3x3(hit.tangent, bitangent, hit.normal);
 
     // Transform to shading space to simplify operations (NDotL = L.z; NDotV = V.z; NDotH = H.z)
     V = ToLocal(onb, V);
