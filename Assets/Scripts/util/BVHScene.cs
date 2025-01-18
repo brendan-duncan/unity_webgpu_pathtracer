@@ -678,8 +678,8 @@ public class BVHScene
 
             int bvhIndex = bvhList[meshIndex];
 
-            _blasInstances[instanceIndex].localToWorld = localToWorld;//.transpose;
-            _blasInstances[instanceIndex].worldToLocal = worldToLocal;//.transpose;
+            _blasInstances[instanceIndex].localToWorld = localToWorld;
+            _blasInstances[instanceIndex].worldToLocal = worldToLocal;
             _blasInstances[instanceIndex].aabbMin = bounds.min;
             _blasInstances[instanceIndex].blasIndex = instanceIndex;
             _blasInstances[instanceIndex].aabbMax = bounds.max;
