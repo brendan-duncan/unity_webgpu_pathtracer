@@ -108,9 +108,9 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
         attr.normal2 = ReadVertexNormal(vertIndices.z);
 
         // Transform normals to world space
-        attr.normal0 = mul(LocalToWorld, float4(attr.normal0.xyz, 0)).xyz;
-        attr.normal1 = mul(LocalToWorld, float4(attr.normal1.xyz, 0)).xyz;
-        attr.normal2 = mul(LocalToWorld, float4(attr.normal2.xyz, 0)).xyz;
+        attr.normal0 = normalize(mul(LocalToWorld, float4(attr.normal0.xyz, 0)).xyz);
+        attr.normal1 = normalize(mul(LocalToWorld, float4(attr.normal1.xyz, 0)).xyz);
+        attr.normal2 = normalize(mul(LocalToWorld, float4(attr.normal2.xyz, 0)).xyz);
     #endif
 
     #if HAS_TANGENTS
@@ -119,9 +119,9 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
         attr.tangent2 = ReadVertexTangent(vertIndices.z);
 
         // Transform normals to world space
-        attr.tangent0 = mul(LocalToWorld, float4(attr.tangent0.xyz, 0)).xyz;
-        attr.tangent1 = mul(LocalToWorld, float4(attr.tangent1.xyz, 0)).xyz;
-        attr.tangent2 = mul(LocalToWorld, float4(attr.tangent2.xyz, 0)).xyz;
+        attr.tangent0 = normalize(mul(LocalToWorld, float4(attr.tangent0.xyz, 0)).xyz);
+        attr.tangent1 = normalize(mul(LocalToWorld, float4(attr.tangent1.xyz, 0)).xyz);
+        attr.tangent2 = normalize(mul(LocalToWorld, float4(attr.tangent2.xyz, 0)).xyz);
     #endif
 
     #if HAS_UVS
