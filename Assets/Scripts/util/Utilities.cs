@@ -6,6 +6,11 @@ using UnityEngine.Rendering;
 
 internal static class Utilities
 {
+    public static unsafe float BitCastIntToFloat(int value)
+    {
+        return *(float*)(&value);
+    }
+
     // Finds the offset of an attribute as well as the vertex stride.
     public static void FindVertexAttribute(Mesh mesh, VertexAttribute targetAttribute, out int attributeOffset, out int vertexStride)
     {

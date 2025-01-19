@@ -27,9 +27,7 @@ float3 EvalDiffuse(in Material mat, float3 Csheen, float3 V, float3 L, float3 H,
 {
     pdf = 0.0f;
     if (L.z <= 0.0f)
-    {
-        return (float3)0.0f;
-    }
+        return 0.0f;
     else
     {
         float LDotH = dot(L, H);
@@ -60,9 +58,7 @@ float3 EvalMicrofacetReflection(in Material mat, float3 V, float3 L, float3 H, f
 {
     pdf = 0.0f;
     if (L.z <= 0.0f)
-    {
-        return (float3)0.0f;
-    }
+        return 0.0f;
     else
     {
         float D = GTR2Aniso(H.z, H.x, H.y, mat.ax, mat.ay);
@@ -78,9 +74,7 @@ float3 EvalMicrofacetRefraction(in Material mat, float eta, float3 V, float3 L, 
 {
     pdf = 0.0;
     if (L.z >= 0.0)
-    {
-        return (float3)(0.0);
-    }
+        return 0.0f;
     else
     {
         float LDotH = dot(L, H);
@@ -103,9 +97,7 @@ float3 EvalClearcoat(in Material mat, float3 V, float3 L, float3 H, out float pd
 {
     pdf = 0.0;
     if (L.z <= 0.0)
-    {
-        return (float3)(0.0);
-    }
+        return 0.0f;
     else
     {
         float VDotH = dot(V, H);
@@ -184,8 +176,8 @@ float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, i
         if (F0 != 1.0f && mat.ior != 0.0f)
         {
             float invEta = rcp(mat.ior);
-            float invF0 = 1.0 - F0;
-            invF0 = SafeRcp(invF0);
+            float invF0 = 1.0f - F0;
+            invF0 = rcp(invF0);
             F = (DielectricFresnel(VDotH, invEta) - F0) * invF0;
         }
 

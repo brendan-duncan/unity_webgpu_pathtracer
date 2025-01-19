@@ -16,11 +16,6 @@ float3 PathTrace(Ray ray, inout uint rngState)
     LightSampleRec lightSample = (LightSampleRec)0;
     ScatterSampleRec scatterSample = (ScatterSampleRec)0;
 
-    // For medium tracking
-    //bool inMedium = false;
-    //bool mediumSampled = false;
-    //bool surfaceScatter = false;
-
     const uint maxRayBounces = max(MaxRayBounces, 1u);
 
     uint rayDepth = 0;
@@ -62,8 +57,6 @@ float3 PathTrace(Ray ray, inout uint rngState)
         if (rayDepth >= maxRayBounces)
             break;
 
-        //surfaceScatter = true;
-
         // Ignore intersection and continue ray based on alpha test
         if ((material.alphaMode == ALPHA_MODE_MASK && material.opacity < material.alphaCutoff) ||
             (material.alphaMode == ALPHA_MODE_BLEND && RandomFloat(rngState) > material.opacity))
@@ -74,7 +67,9 @@ float3 PathTrace(Ray ray, inout uint rngState)
         else
         {
             // Next event estimation
-            //radiance += DirectLight(ray, hit, material, rngState) * throughput;
+            radiance += DirectLight(ray, hit, material, rngState) * throughput;
+            // Break here to debug direct lighting
+            //break;
 
             // Sample BSDF for color and outgoing direction
             scatterSample.f = SampleBRDF(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngState);
@@ -85,6 +80,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
                 break;
             }
 
+            // Debug the result of SampleBRDF.
             //radiance = scatterSample.f;
             //break;
 

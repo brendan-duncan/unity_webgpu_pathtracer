@@ -14,7 +14,7 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Examples/Scenes/CornellBox.unity
     guid: 6423b87da8f99ad448b16af10b7b75c0
-  - enabled: 1
+  - enabled: 0
     path: Assets/Examples/Scenes/Helmet.unity
     guid: 091f2aa6ba5ae3446b6a936b425ffae3
   - enabled: 0
@@ -23,5 +23,8 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Examples/Scenes/Quad.unity
     guid: dfeee1884b02b6748b6266eb6644f3d3
+  - enabled: 1
+    path: Assets/Examples/Scenes/Lights.unity
+    guid: b4cfa508154c7c24ab40d4dcfccc58a5
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

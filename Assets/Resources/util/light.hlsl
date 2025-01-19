@@ -3,6 +3,7 @@
 
 #include "common.hlsl"
 
+#if HAS_LIGHTS
 #define LIGHT_TYPE_SPOT 0
 #define LIGHT_TYPE_DIRECTIONAL 1
 #define LIGHT_TYPE_POINT 2
@@ -15,22 +16,22 @@
 struct Light
 {
     float3 position;
-    float type;
+    uint type;
 
     float3 emission;
     float range;
 
-    float3 u;
+    float3 u; // For spot and directional lights, u is the forward direction of the light
     float area;
 
-    float3 v;
-    float spotAngle;
+    float3 v; // For spot lights, v is the cosine of the outter and inner angles.
+    float padding;
 };
 
 int LightCount;
 StructuredBuffer<Light> Lights;
 
-void SampleRectLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngState)
+bool SampleRectLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngState)
 {
     float r1 = RandomFloat(rngState);
     float r2 = RandomFloat(rngState);
@@ -44,73 +45,81 @@ void SampleRectLight(in Light light, in float3 scatterPos, inout LightSampleRec 
     lightSample.normal = normalize(cross(light.u, light.v));
     lightSample.emission = light.emission * float(LightCount);
     lightSample.pdf = distSq / (light.area * abs(dot(lightSample.normal, lightSample.direction)));
+
+    return true;
 }
 
-void SamplePointLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample)
+bool SamplePointLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample)
 {
     lightSample.normal = normalize(scatterPos - light.position);
     lightSample.emission = light.emission;
     lightSample.direction = -lightSample.normal;
     lightSample.distance = length(scatterPos - light.position);
     lightSample.pdf = 0.0f;
+
+    return true;
 }
 
-void SampleSpotLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample)
+bool SampleSpotLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample)
 {
-    lightSample.normal = normalize(cross(light.u, light.v));
+    lightSample.normal = normalize(light.u);
     lightSample.emission = light.emission;
-    lightSample.direction = normalize(scatterPos - light.position);
+    lightSample.direction = -normalize(scatterPos - light.position);
     lightSample.distance = length(light.position - scatterPos);
     lightSample.pdf = 0.0f;
+
+    return true;
 }
 
-void SampleOneLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngState)
+bool SampleOneLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngState)
 {
-    int type = int(light.type);
-    if (type == LIGHT_TYPE_RECTANGLE)
-    {
-        SampleRectLight(light, scatterPos, lightSample, rngState);
-    }
+    uint type = light.type;
+    bool result = false;
+    if (type == LIGHT_TYPE_SPOT)
+        result = SampleSpotLight(light, scatterPos, lightSample);
+    else if (type == LIGHT_TYPE_RECTANGLE)
+        result = SampleRectLight(light, scatterPos, lightSample, rngState);
     else if (type == LIGHT_TYPE_POINT)
-    {
-        SamplePointLight(light, scatterPos, lightSample);
-    }
-    else if (type == LIGHT_TYPE_SPOT)
-    {
-        SampleSpotLight(light, scatterPos, lightSample);
-    }
+        result = SamplePointLight(light, scatterPos, lightSample);
+    return result;
 }
 
 float3 EvalLight(in Ray ray, in RayHit hit, in Material mat, in Light light, in float3 scatterPos, in LightSampleRec lightSample)
 {
-    float3 Ld = 0.0f;
-
-    float falloff = 0.0f;
-    if (lightSample.distance <= light.range)
+    float falloff = 1.0f;
+    if (lightSample.distance > light.range)
+        falloff = 0.0f;
+    else
     {
         // How does Unity falloff work?
         float r = lightSample.distance / light.range;
         float atten = saturate(1.0 / (1.0 + 25.0 * r * r) * saturate((1 - r) * 5.0));
-        falloff = atten;
+        falloff *= atten;
     }
 
     if (light.type == LIGHT_TYPE_SPOT)
     {
-        /*float3 lightDir = lightSample.normal;
-        float cosTheta = dot(lightDir, lightSample.direction);
-        float cosAlpha = dot(-lightSample.direction, lightSample.normal);
-        float cosBeta = dot(lightDir, lightSample.normal);
-        float spot = ;
-        falloff *= spot;*/
+        float cosTheta = dot(normalize(-lightSample.direction), normalize(lightSample.normal));
+        // v.x is the cosine of the outer spotlight angle.
+        // v.y is the cosine of the inner spotlight angle.
+        // If cosTheta is > than the inner angle, then it's fully in the spotlight.
+        // If cosTheta is < than the outer angle, then it's fully out of the spotlight.
+        // If cosTheta is between the inner and outer angles, we fade from 1 to 0 as it approaches the outer angle.
+        if (cosTheta < light.v.x)
+            falloff = 0.0f;
+        else if (cosTheta > light.v.x && cosTheta < light.v.y)
+            falloff *= (cosTheta - light.v.x) / (light.v.y - light.v.x);
     }
 
     float3 Li = light.emission * falloff;
+    float3 Ld = 0.0f;
 
     Ray shadowRay = {scatterPos, lightSample.direction};
     bool inShadow = ShadowRayIntersect(shadowRay);
     if (!inShadow)
     {
-        float pdf;
+        //Ld = Li;
+        float pdf = 0.0f;
         float3 f = EvalBRDF(hit, mat, -ray.direction, hit.normal, lightSample.direction, pdf);
         float lightPdf = 1.0f;
         if (lightSample.pdf > 0.0f)
@@ -121,13 +130,14 @@ float3 EvalLight(in Ray ray, in RayHit hit, in Material mat, in Light light, in 
 
     return Ld;
 }
+#endif // HAS_LIGHTS
 
 float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngState)
 {
     float3 Ld = 0.0f;
     float3 scatterPos = hit.position + hit.normal * EPSILON;
-    ScatterSampleRec scatterSample = (ScatterSampleRec)0;
 
+    //ScatterSampleRec scatterSample = (ScatterSampleRec)0;
     /*if (EnvironmentMode == 0)
     {
         #if HAS_ENVIRONMENT_TEXTURE
@@ -165,35 +175,12 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
         }
         #endif // HAS_ENVIRONMENT_TEXTURE
     }
-    else if (EnvironmentMode == 1)
+    else
     {
         float3 lightDir = normalize(RandomCosineHemisphere(hit.normal, rngState));
         float4 lightColorPdf = StandardSky(lightDir, EnvironmentIntensity);
         float3 Li = lightColorPdf.rgb;
         float lightPdf = lightColorPdf.w;
-        Ray shadowRay = {scatterPos, lightDir};
-        bool inShadow = ShadowRayIntersect(shadowRay);
-        if (!inShadow)
-        {
-            scatterSample.f = EvalBRDF(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
-            if (scatterSample.pdf > 0.0)
-            {
-                float misWeight = PowerHeuristic(lightPdf, scatterSample.pdf);
-                if (misWeight > 0.0)
-                    Ld += misWeight * Li * scatterSample.f / lightPdf;
-            }
-        }
-    }
-    else
-    {
-        float lightPdf = 1.0f / (4.0f * PI);
-        float2 uv = float2(RandomFloat(rngState), RandomFloat(rngState));
-        float3 lightDir = SampleSolarDiskDirection(uv, SOLAR_COS_THETA_MAX, SkyStateBuffer[0].sunDirection);
-        float3 Li = float3(
-            SkyStateBuffer[0].solarRadiances[0],
-            SkyStateBuffer[0].solarRadiances[1],
-            SkyStateBuffer[0].solarRadiances[2]
-        );
         Ray shadowRay = {scatterPos, lightDir};
         bool inShadow = ShadowRayIntersect(shadowRay);
         if (!inShadow)
@@ -215,14 +202,8 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
     int lightIndex = int(RandomFloat(rngState) * float(LightCount));
     Light light = Lights[lightIndex];
 
-    SampleOneLight(light, scatterPos, lightSample, rngState);
-
-    if (dot(lightSample.direction, lightSample.normal) <= 0.0f)
-    {
-        int type = int(light.type);
-        if (type == LIGHT_TYPE_POINT || type == LIGHT_TYPE_RECTANGLE || type == LIGHT_TYPE_SPOT)
-            Ld += EvalLight(ray, hit, mat, light, scatterPos, lightSample);
-    }
+    if (SampleOneLight(light, scatterPos, lightSample, rngState))
+        Ld += EvalLight(ray, hit, mat, light, scatterPos, lightSample);
 #endif // HAS_LIGHTS
 
     return Ld;

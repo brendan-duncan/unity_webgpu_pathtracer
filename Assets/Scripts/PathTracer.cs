@@ -195,7 +195,7 @@ public class PathTracer : MonoBehaviour
             Reset();
         }
 
-        _pathTracerShader.DisableKeyword(_hasLightsKeyword);
+        //_pathTracerShader.DisableKeyword(_hasLightsKeyword);
         UpdateLights();
 
         _bvhScene.Update();
@@ -206,6 +206,33 @@ public class PathTracer : MonoBehaviour
     {
         _currentSample = 0;
         _currentRT = 0;
+    }
+
+    void GetLightData(Light light, out Vector3 lightPosition, out Vector3 u, out Vector3 v, out float area)
+    {
+        lightPosition = light.transform.position;
+        area = light.areaSize.x * light.areaSize.y;
+
+        if (light.type == LightType.Directional)
+        {
+            u = light.transform.forward;
+            v.x = 0.0f;
+            v.y = 0.0f;
+            v.z = 0.0f;
+        }
+        else if (light.type == LightType.Spot)
+        {
+            u = light.transform.forward;
+            v.x = Mathf.Cos(light.spotAngle * 0.5f * Mathf.Deg2Rad);
+            v.y = Mathf.Cos(light.innerSpotAngle * 0.5f * Mathf.Deg2Rad);
+            v.z = 0.0f;
+            //Debug.Log($"!!!! {u} : {light.spotAngle}/{v.x} {light.innerSpotAngle}/{v.y}");
+        }
+        else
+        {
+            u = light.transform.right * light.areaSize.x;
+            v = light.transform.up * light.areaSize.y;
+        }
     }
 
     public void UpdateLights()
@@ -241,22 +268,44 @@ public class PathTracer : MonoBehaviour
 
         bool dirty = false;
 
+        Vector3 lightPosition = new Vector3();
+        Vector3 lightU = new Vector3();
+        Vector3 lightV = new Vector3(); 
+        Vector3 lightColor = new Vector3();
+        float lightArea = 0.0f;
+
         _lightCount = _lights.Length;
         for (int i = 0; i < _lights.Length; ++i)
         {
             Light light = _lights[i];
             int li = i * LightStructSize;
 
-            Vector3 lightPosition = light.transform.position;
-            Vector3 u = light.transform.right.normalized * light.areaSize.x;
-            Vector3 v = light.transform.up.normalized * light.areaSize.y; 
-            float area = light.areaSize.x * light.areaSize.y;
+            lightColor.x = light.color.r * light.intensity;
+            lightColor.y = light.color.g * light.intensity;
+            lightColor.z = light.color.b * light.intensity;
 
-            if (_lightData[li + 0] != lightPosition.x || _lightData[li + 1] != lightPosition.y || _lightData[li + 2] != lightPosition.z ||
-                _lightData[li + 3] != (float)light.type || _lightData[li + 4] != light.color.r * light.intensity ||
-                _lightData[li + 5] != light.color.g * light.intensity || _lightData[li + 6] != light.color.b * light.intensity ||
-                _lightData[li + 7] != light.range || _lightData[li + 8] != u.x || _lightData[li + 9] != u.y || _lightData[li + 10] != u.z ||
-                _lightData[li + 11] != area || _lightData[li + 12] != v.x || _lightData[li + 13] != v.y || _lightData[li + 14] != v.z)
+            GetLightData(light, out lightPosition, out lightU, out lightV, out lightArea);
+
+            float lightType = Utilities.BitCastIntToFloat((int)light.type);
+
+            if (_lightData[li + 0] != lightPosition.x ||
+                _lightData[li + 1] != lightPosition.y ||
+                _lightData[li + 2] != lightPosition.z ||
+                _lightData[li + 3] != lightType ||
+
+                _lightData[li + 4] != lightColor.x ||
+                _lightData[li + 5] != lightColor.y  ||
+                _lightData[li + 6] != lightColor.z ||
+                _lightData[li + 7] != light.range ||
+
+                _lightData[li + 8] != lightU.x ||
+                _lightData[li + 9] != lightU.y ||
+                _lightData[li + 10] != lightU.z ||
+                _lightData[li + 11] != lightArea ||
+
+                _lightData[li + 12] != lightV.x ||
+                _lightData[li + 13] != lightV.y ||
+                _lightData[li + 14] != lightV.z)
             {
                 dirty = true;
             }
@@ -264,22 +313,22 @@ public class PathTracer : MonoBehaviour
             _lightData[li + 0] = lightPosition.x;
             _lightData[li + 1] = lightPosition.y;
             _lightData[li + 2] = lightPosition.z;
-            _lightData[li + 3] = (float)light.type;
+            _lightData[li + 3] = lightType;
 
-            _lightData[li + 4] = light.color.r * light.intensity;
-            _lightData[li + 5] = light.color.g * light.intensity;
-            _lightData[li + 6] = light.color.b * light.intensity;
+            _lightData[li + 4] = lightColor.x;
+            _lightData[li + 5] = lightColor.y;
+            _lightData[li + 6] = lightColor.z;
             _lightData[li + 7] = light.range;
 
-            _lightData[li + 8] = u.x;
-            _lightData[li + 9] = u.y;
-            _lightData[li + 10] = u.z;
-            _lightData[li + 11] = area;
+            _lightData[li + 8] = lightU.x;
+            _lightData[li + 9] = lightU.y;
+            _lightData[li + 10] = lightU.z;
+            _lightData[li + 11] = lightArea;
 
-            _lightData[li + 12] = v.x;
-            _lightData[li + 13] = v.y;
-            _lightData[li + 14] = v.z;
-            _lightData[li + 15] = light.spotAngle;
+            _lightData[li + 12] = lightV.x;
+            _lightData[li + 13] = lightV.y;
+            _lightData[li + 14] = lightV.z;
+            _lightData[li + 15] = 0.0f; // padding
         }
 
         if (dirty)
