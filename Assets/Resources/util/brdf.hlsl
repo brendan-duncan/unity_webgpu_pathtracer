@@ -125,9 +125,8 @@ float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, i
     pdf = 0.0;
     float3 f = 0.0f;
 
-    // Transform to shading space to simplify operations (NDotL = L.z; NDotV = V.z; NDotH = H.z)
-    V = normalize(ToLocal(onb, V));
-    L = normalize(ToLocal(onb, L));
+    V = ToLocal(onb, V);
+    L = ToLocal(onb, L);
 
     float3 H;
     if (L.z > 0.0)
@@ -239,6 +238,10 @@ float3 EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, ou
     // This is causing rendering issues. Perhaps normal and tangent are not orthogonal?
     //float3 bitangent = normalize(cross(hit.normal, hit.tangent));
     //float3x3 onb = float3x3(hit.tangent, bitangent, hit.normal);
+
+    //V = ToLocal(onb, V);
+    //L = ToLocal(onb, L);
+
     return _EvalBRDF(hit, mat, V, N, L, onb, pdf);
 }
 
@@ -254,7 +257,6 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
     //float3 bitangent = normalize(cross(normalize(hit.normal), normalize(hit.tangent)));
     //float3x3 onb = float3x3(hit.tangent, bitangent, hit.normal);
 
-    // Transform to shading space to simplify operations (NDotL = L.z; NDotV = V.z; NDotH = H.z)
     V = ToLocal(onb, V);
 
     // Tint colors

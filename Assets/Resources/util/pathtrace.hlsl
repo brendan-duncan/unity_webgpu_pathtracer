@@ -51,6 +51,10 @@ float3 PathTrace(Ray ray, inout uint rngState)
 
         Material material = hit.material;
 
+        // Debug a material or intersection property
+        //radiance = hit.ffnormal;
+        //break;
+
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled
         radiance += material.emission * throughput;
 
@@ -72,12 +76,15 @@ float3 PathTrace(Ray ray, inout uint rngState)
             //radiance += DirectLight(ray, hit, material, rngState) * throughput;
 
             // Sample BSDF for color and outgoing direction
-            scatterSample.f = SampleBRDF(hit, material, -ray.direction, hit.normal, scatterSample.L, scatterSample.pdf, rngState);
+            scatterSample.f = SampleBRDF(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngState);
 
             if (scatterSample.pdf > 0.0)
                 throughput *= scatterSample.f / scatterSample.pdf;
             else
                 break;
+
+            //radiance = throughput;
+            //break;
         }
 
         // Move ray origin to hit point and set direction for next bounce

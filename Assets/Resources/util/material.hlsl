@@ -166,8 +166,6 @@ Material GetMaterial(in MaterialData materialData, in Ray ray, inout RayHit hit)
     material.ax = max(0.001, material.roughness / aspect);
     material.ay = max(0.001, material.roughness * aspect);
 
-    hit.ffnormal = dot(hit.normal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
-
     /*if (material.textures.z >= 0.0)
     {
         float3 normalMap = GetNormalMapSample(material, uv);
@@ -176,11 +174,6 @@ Material GetMaterial(in MaterialData materialData, in Ray ray, inout RayHit hit)
         hit.normal = normalize(hit.tangent * normalMap.x + bitangent * normalMap.y + hit.normal * normalMap.z);
         hit.ffnormal = dot(origNormal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
     }*/
-
-    if (dot(ray.direction, hit.normal) < 0.0)
-        hit.eta = 1.0 / material.ior;
-    else
-        hit.eta =  material.ior;
 
     return material;
 }

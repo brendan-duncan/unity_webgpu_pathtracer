@@ -241,8 +241,13 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
         hit.position = ray.origin + hit.distance * ray.direction;
         hit.tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
         hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
+        hit.ffnormal = dot(hit.normal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
         hit.material = GetMaterial(Materials[triAttr.materialIndex], ray, hit);
+        if (dot(ray.direction, hit.normal) < 0.0)
+            hit.eta = 1.0 / hit.material.ior;
+        else
+            hit.eta =  hit.material.ior;
     }
 
     return hit;
