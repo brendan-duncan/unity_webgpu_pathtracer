@@ -295,7 +295,8 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
     hit.distance = FAR_PLANE;
 
     const float3 O = ray.origin;
-    const float3 rD = SafeRcp(ray.direction);
+    const float3 D = normalize(ray.direction);
+    const float3 rD = SafeRcp(D);
 
     uint nodeIndex = 0;
     uint stack[BVH_STACK_SIZE];
@@ -315,8 +316,6 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
 
             // This will show the instances can be intersected.
             //RayIntersectTLAS_Instance(GPUInstances[0], ray, isShadowRay, hit);
-            //RayIntersectTLAS_Instance(GPUInstances[1], ray, isShadowRay, hit);
-            //RayIntersectTLAS_Instance(GPUInstances[2], ray, isShadowRay, hit);
 
             // process leaf node
             for (uint i = 0; i < instanceCount; i++)

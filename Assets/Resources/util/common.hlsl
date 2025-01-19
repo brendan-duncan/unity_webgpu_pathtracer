@@ -7,11 +7,10 @@
 #define TWO_PI     6.28318530717958648
 #define INV_TWO_PI 0.15915494309189533
 #define INV_4_PI   0.07957747154594766
-#define FAR_PLANE  1.0e6f
+#define FAR_PLANE  100000.0f
 
 uint MaxRayBounces;
 uint CurrentSample;
-//float FarPlane;
 uint OutputWidth;
 uint OutputHeight;
 RWTexture2D<float4> Output;

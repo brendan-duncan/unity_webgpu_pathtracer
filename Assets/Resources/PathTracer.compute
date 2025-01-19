@@ -20,12 +20,17 @@
 uint RngSeedRoot;
 int SamplesPerPass;
 
-[numthreads(128, 1, 1)]
+//[numthreads(128, 1, 1)]
+[numthreads(8, 8, 1)]
 void PathTracer(uint3 id : SV_DispatchThreadID)
 {
-    const uint pixelIndex = min(id.x, OutputWidth * OutputHeight - 1);
-    const uint pixelX = pixelIndex % OutputWidth;
-    const uint pixelY = pixelIndex / OutputWidth;
+    //const uint pixelIndex = id.x;
+    //const uint pixelX = pixelIndex % OutputWidth;
+    //const uint pixelY = pixelIndex / OutputWidth;
+    const uint pixelX = id.x;
+    const uint pixelY = id.y;
+    const uint pixelIndex = pixelY * OutputWidth + pixelX;
+
     if (pixelX < OutputWidth && pixelY < OutputHeight)
     {
         float2 pixelCoords = float2(pixelX, pixelY);

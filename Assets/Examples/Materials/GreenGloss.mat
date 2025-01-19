@@ -130,21 +130,21 @@ Material:
     - _ZWrite: 1
     - alphaCutoff: 0.5
     - anisotropic: 0
-    - anisotropicFactor: 0
+    - anisotropicFactor: 0.8357143
     - clearCoat: 0
-    - clearCoatFactor: 0
-    - clearCoatGloss: 0
-    - ior: 1
+    - clearCoatFactor: 0.8428571
+    - clearCoatGloss: 0.65
+    - ior: 1.4928571
     - metallic: 0
-    - metallicFactor: 0.344
+    - metallicFactor: 0.092857145
     - normalScale: 1
     - normalTextureStrength: 1
     - roughness: 0.5
-    - roughnessFactor: 0.268
+    - roughnessFactor: 0
     - sheen: 0
-    - sheenFactor: 0
+    - sheenFactor: 0.75714284
     - sheenTint: 0
-    - specularFactor: 0
+    - specularFactor: 1.8857143
     - specularTint: 0
     - specularTransmission: 0
     - subsurface: 0
@@ -155,7 +155,7 @@ Material:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _Emission: {r: 0, g: 0, b: 0, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - baseColorFactor: {r: 0.5031611, g: 0.9716981, b: 0.42626378, a: 1}
+    - baseColorFactor: {r: 0.5031611, g: 0.9716981, b: 0.4196412, a: 0.15714286}
     - emissiveFactor: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

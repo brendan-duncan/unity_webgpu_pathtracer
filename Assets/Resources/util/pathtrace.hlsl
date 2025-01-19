@@ -23,7 +23,8 @@ float3 PathTrace(Ray ray, inout uint rngState)
 
     const uint maxRayBounces = max(MaxRayBounces, 1u);
 
-    for (uint rayDepth = 0; ; ++rayDepth)
+    uint rayDepth = 0;
+    for (; ; ++rayDepth)
     {
         RayHit hit = RayIntersect(ray);
         bool didHit = hit.distance < FAR_PLANE;
@@ -52,7 +53,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
         Material material = hit.material;
 
         // Debug a material or intersection property
-        //radiance = hit.ffnormal;
+        //radiance = material.baseColor;
         //break;
 
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled
@@ -78,13 +79,19 @@ float3 PathTrace(Ray ray, inout uint rngState)
             // Sample BSDF for color and outgoing direction
             scatterSample.f = SampleBRDF(hit, material, -ray.direction, hit.ffnormal, scatterSample.L, scatterSample.pdf, rngState);
 
+            if (isnan(scatterSample.f.x) || isnan(scatterSample.f.y) || isnan(scatterSample.f.z))
+            {
+                radiance = float3(0.0f, 1.0f, 0.0f);
+                break;
+            }
+
+            //radiance = scatterSample.f;
+            //break;
+
             if (scatterSample.pdf > 0.0)
                 throughput *= scatterSample.f / scatterSample.pdf;
             else
                 break;
-
-            //radiance = throughput;
-            //break;
         }
 
         // Move ray origin to hit point and set direction for next bounce

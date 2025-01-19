@@ -78,3 +78,4 @@ Plugin/build
 
 # Local Netlify folder
 .netlify
+build_vs

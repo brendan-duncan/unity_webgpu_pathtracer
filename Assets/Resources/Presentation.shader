@@ -1,8 +1,9 @@
 Shader "Hidden/PathTracer/Presentation"
 {
     CGINCLUDE
+        #include "util/common.hlsl"
         #include "util/tonemap.hlsl"
-  
+
         struct Attributes
         {
             float4 vertex : POSITION;
@@ -28,9 +29,10 @@ Shader "Hidden/PathTracer/Presentation"
             return o;
         }
 
-        half4 FragBlit(Varyings i) : SV_Target
+        float4 FragBlit(Varyings i) : SV_Target
         {
             float3 color = tex2D(_MainTex, i.uv).rgb;
+
             color *= Exposure;
             //if (Exposure > 0.0f)
             //    color *= 1.0f / exp2(Exposure); // Exposure Stops
@@ -38,7 +40,7 @@ Shader "Hidden/PathTracer/Presentation"
             switch (Mode)
             {
                 case 1:
-                    color = Aces(color);
+                    color = ACESFitted(color);
                     break;
                 case 2:
                     color = Filmic(color);
@@ -54,10 +56,10 @@ Shader "Hidden/PathTracer/Presentation"
             if (sRGB)
             {
                 float3 srgb = pow(color, 1.0f / 2.2f);
-                return half4(srgb, 1.0f);
+                return float4(srgb, 1.0f);
             }
 
-            return half4(color, 1.0f);
+            return float4(color, 1.0f);
         }
     ENDCG
 

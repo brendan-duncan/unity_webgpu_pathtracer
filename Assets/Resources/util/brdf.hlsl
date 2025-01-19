@@ -183,10 +183,9 @@ float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, i
         float F = 0.0f;
         if (F0 != 1.0f && mat.ior != 0.0f)
         {
-            float invEta = 1.0 / mat.ior;
+            float invEta = rcp(mat.ior);
             float invF0 = 1.0 - F0;
-            if (invF0 != 0.0f)
-                invF0 = 1.0f / invF0;
+            invF0 = SafeRcp(invF0);
             F = (DielectricFresnel(VDotH, invEta) - F0) * invF0;
         }
 
@@ -287,21 +286,21 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
     clearCtPr *= invTotalWt;
 
     // CDF of the sampling probabilities
-    float cdf[5];
-    cdf[0] = diffPr;
-    cdf[1] = cdf[0] + dielectricPr;
-    cdf[2] = cdf[1] + metalPr;
-    cdf[3] = cdf[2] + glassPr;
-    cdf[4] = cdf[3] + clearCtPr;
+    float cdf0 = diffPr;
+    float cdf1 = cdf0 + dielectricPr;
+    float cdf2 = cdf1 + metalPr;
+    float cdf3 = cdf2 + glassPr;
+    float cdf4 = cdf3 + clearCtPr;
 
     // Sample a lobe based on its importance
     float r3 = RandomFloat(rngState);
 
-    if (r3 < cdf[0]) // Diffuse
+    if (r3 < cdf0) // Diffuse
     {
         L = CosineSampleHemisphere(r1, r2);
+        //return float3(1.0f, 0.0f, 0.0f);
     }
-    else if (r3 < cdf[2]) // Dielectric + Metallic reflection
+    else if (r3 < cdf2) // Dielectric + Metallic reflection
     {
         float3 H = SampleGGXVNDF(V, mat.ax, mat.ay, r1, r2);
 
@@ -309,8 +308,9 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
             H = -H;
 
         L = normalize(reflect(-V, H));
+        //return float3(0.0f, 1.0f, 0.0f);
     }
-    else if (r3 < cdf[3]) // Glass
+    else if (r3 < cdf3) // Glass
     {
         float3 H = SampleGGXVNDF(V, mat.ax, mat.ay, r1, r2);
         float F = DielectricFresnel(abs(dot(V, H)), hit.eta);
@@ -319,13 +319,15 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
             H = -H;
 
         // Rescale random number for reuse
-        r3 = (r3 - cdf[2]) / (cdf[3] - cdf[2]);
+        r3 = (r3 - cdf2) / (cdf3 - cdf2);
 
         // Reflection
         if (r3 < F)
             L = normalize(reflect(-V, H));
         else // Transmission
             L = normalize(refract(-V, H, hit.eta));
+
+        //return float3(0.0f, 0.0f, 1.0f);
     }
     else // Clearcoat
     {
@@ -335,6 +337,7 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
             H = -H;
 
         L = normalize(reflect(-V, H));
+        //return float3(1.0f, 1.0f, 0.0f);
     }
 
     L = ToWorld(onb, L);
