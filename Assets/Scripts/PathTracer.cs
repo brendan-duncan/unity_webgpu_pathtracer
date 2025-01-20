@@ -232,6 +232,7 @@ public class PathTracer : MonoBehaviour
         {
             u = light.transform.right * light.areaSize.x;
             v = light.transform.up * light.areaSize.y;
+            lightPosition -= (u + v) * 0.5f;
         }
     }
 

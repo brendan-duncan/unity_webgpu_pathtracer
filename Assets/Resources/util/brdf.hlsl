@@ -3,7 +3,6 @@
 
 #include "common.hlsl"
 #include "random.hlsl"
-#include "ray.hlsl"
 #include "sampling.hlsl"
 #include "sky.hlsl"
 

@@ -3,7 +3,6 @@
 
 #include "common.hlsl"
 #include "brdf.hlsl"
-#include "ray.hlsl"
 
 float4 GetTexturePixel(uint textureDataOffset, uint width, uint height, uint x, uint y)
 {

@@ -3,7 +3,6 @@
 
 #include "common.hlsl"
 #include "random.hlsl"
-#include "ray.hlsl"
 
 float4x4 CamToWorld;
 float4x4 CamInvProj;

@@ -15,7 +15,6 @@
 #include "util/common.hlsl"
 #include "util/pathtrace.hlsl"
 #include "util/random.hlsl"
-#include "util/ray.hlsl"
 
 uint RngSeedRoot;
 int SamplesPerPass;

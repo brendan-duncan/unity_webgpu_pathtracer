@@ -4,7 +4,6 @@
 #include "common.hlsl"
 #include "material.hlsl"
 #include "random.hlsl"
-#include "ray.hlsl"
 #include "triangle_attributes.hlsl"
 
 struct GPUInstance

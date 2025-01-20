@@ -4,7 +4,6 @@
 #include "common.hlsl"
 #include "material.hlsl"
 #include "random.hlsl"
-#include "ray.hlsl"
 #include "triangle_attributes.hlsl"
 
 struct BVHInstance
@@ -156,11 +155,8 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
     return hitmask;
 }
 
-RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
+bool RayIntersectBvh(const Ray ray, inout RayHit hit, bool isShadowRay)
 {
-    RayHit hit = (RayHit)0;
-    hit.distance = FAR_PLANE;
-
     float3 invDir = SafeRcp(ray.direction.xyz);
     uint octinv4 = (7 - ((ray.direction.x < 0 ? 4 : 0) | (ray.direction.y < 0 ? 2 : 0) | (ray.direction.z < 0 ? 1 : 0))) * 0x1010101;
 
@@ -244,24 +240,51 @@ RayHit RayIntersectBvh(const Ray ray, bool isShadowRay)
         hit.ffnormal = dot(hit.normal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
         hit.material = GetMaterial(Materials[triAttr.materialIndex], ray, hit);
-        if (dot(ray.direction, hit.normal) < 0.0)
-            hit.eta = 1.0 / hit.material.ior;
-        else
-            hit.eta =  hit.material.ior;
+        hit.eta = (dot(ray.direction, hit.normal) < 0.0) ? 1.0f / hit.material.ior : hit.material.ior;
+        hit.intersectType = INTERSECT_TRIANGLE;
     }
 
-    return hit;
+    return hit.distance < FAR_PLANE;
 }
 
-RayHit RayIntersect(in Ray ray)
+bool RayIntersect(in Ray ray, inout RayHit hit)
 {
-    return RayIntersectBvh(ray, false);
+    hit.distance = FAR_PLANE;
+
+    RayIntersectBvh(ray, hit, false);
+
+#if HAS_LIGHTS
+    for (int i = 0; i < LightCount; ++i)
+    {
+        Light light = Lights[i];
+        if (light.type == LIGHT_TYPE_RECTANGLE)
+        {
+            float3 normal = normalize(cross(light.u, light.v));
+            float4 plane = float4(normal, dot(normal, light.position));
+            float3 u = light.u / dot(light.u, light.u);
+            float3 v = light.v / dot(light.v, light.v);
+            float d = RectIntersect(light.position, u, v, plane, ray);
+            if (d > 0.0 && d < hit.distance && dot(normal, ray.direction) < 0.0)
+            {
+                hit.distance = d;
+                hit.position = ray.origin + d * ray.direction;
+                hit.normal = normal;
+                hit.ffnormal = dot(hit.normal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
+                hit.triIndex = i;
+                hit.intersectType = INTERSECT_LIGHT;
+            }
+        }
+    }
+#endif
+
+    return hit.distance < FAR_PLANE;
 }
 
 bool ShadowRayIntersect(in Ray ray)
 {
-    RayHit hit = RayIntersectBvh(ray, true);
-    return hit.distance < FAR_PLANE;
+    RayHit hit = (RayHit)0;
+    hit.distance = FAR_PLANE;
+    return RayIntersectBvh(ray, hit, true);
 }
 
 #endif // __UNITY_PATHTRACER_BVH_HLSL__

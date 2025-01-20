@@ -5,7 +5,6 @@
 #include "brdf.hlsl"
 #include "light.hlsl"
 #include "material.hlsl"
-#include "ray.hlsl"
 #include "sky.hlsl"
 
 float3 PathTrace(Ray ray, inout uint rngState)
@@ -18,11 +17,12 @@ float3 PathTrace(Ray ray, inout uint rngState)
 
     const uint maxRayBounces = max(MaxRayBounces, 1u);
 
+    RayHit hit = (RayHit)0;
+
     uint rayDepth = 0;
     for (; ; ++rayDepth)
     {
-        RayHit hit = RayIntersect(ray);
-        bool didHit = hit.distance < FAR_PLANE;
+        bool didHit = RayIntersect(ray, hit);
 
         if (!didHit)
         {
@@ -35,6 +35,15 @@ float3 PathTrace(Ray ray, inout uint rngState)
                 radiance += misWeight * skyColorPDf.rgb * throughput;
             break;
         }
+
+#if HAS_LIGHTS
+        if (hit.intersectType == INTERSECT_LIGHT)
+        {
+            Light light = Lights[hit.triIndex];
+            radiance += light.emission * throughput;
+            break;
+        }
+#endif
 
         // Test if the normal and tangent are orthogonal to each other.
         /*float3 N = normalize(hit.normal);

@@ -4,33 +4,6 @@
 #include "common.hlsl"
 
 #if HAS_LIGHTS
-#define LIGHT_TYPE_SPOT 0
-#define LIGHT_TYPE_DIRECTIONAL 1
-#define LIGHT_TYPE_POINT 2
-#define LIGHT_TYPE_RECTANGLE 3
-#define LIGHT_TYPE_DISC 4
-#define LIGHT_TYPE_PYRAMID 5
-#define LIGHT_TYPE_BOX 6
-#define LIGHT_TYPE_TUBE 7
-
-struct Light
-{
-    float3 position;
-    uint type;
-
-    float3 emission;
-    float range;
-
-    float3 u; // For spot and directional lights, u is the forward direction of the light
-    float area;
-
-    float3 v; // For spot lights, v is the cosine of the outter and inner angles.
-    float padding;
-};
-
-int LightCount;
-StructuredBuffer<Light> Lights;
-
 bool SampleRectLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngState)
 {
     float r1 = RandomFloat(rngState);
@@ -88,13 +61,22 @@ float3 EvalLight(in Ray ray, in RayHit hit, in Material mat, in Light light, in 
 {
     float falloff = 1.0f;
     if (lightSample.distance > light.range)
+    {
         falloff = 0.0f;
+    }
     else
     {
         // How does Unity falloff work?
         float r = lightSample.distance / light.range;
         float atten = saturate(1.0 / (1.0 + 25.0 * r * r) * saturate((1 - r) * 5.0));
         falloff *= atten;
+    }
+
+    if (light.type == LIGHT_TYPE_RECTANGLE)
+    {
+        // Only light in the forward direction of the light.
+        float cosTheta = dot(normalize(-lightSample.direction), normalize(lightSample.normal));
+        falloff = cosTheta < 0 ? 0.0f : falloff;
     }
 
     if (light.type == LIGHT_TYPE_SPOT)

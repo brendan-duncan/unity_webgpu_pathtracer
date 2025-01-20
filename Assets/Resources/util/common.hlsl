@@ -110,6 +110,68 @@ struct Material
     //Medium medium;
 };
 
+#if HAS_LIGHTS
+#define LIGHT_TYPE_SPOT 0
+#define LIGHT_TYPE_DIRECTIONAL 1
+#define LIGHT_TYPE_POINT 2
+#define LIGHT_TYPE_RECTANGLE 3
+#define LIGHT_TYPE_DISC 4
+#define LIGHT_TYPE_PYRAMID 5
+#define LIGHT_TYPE_BOX 6
+#define LIGHT_TYPE_TUBE 7
+#define LIGHT_TYPE_SPHERE 8
+
+struct Light
+{
+    float3 position;
+    uint type;
+
+    float3 emission;
+    float range;
+
+    float3 u; // For spot and directional lights, u is the forward direction of the light
+    float area;
+
+    float3 v; // For spot lights, v is the cosine of the outter and inner angles.
+    float padding;
+};
+
+int LightCount;
+StructuredBuffer<Light> Lights;
+#endif // HAS_LIGHTS
+
+struct Ray
+{
+    float3 origin;
+    float3 direction;
+};
+
+#define INTERSECT_TRIANGLE 0
+#define INTERSECT_LIGHT 1
+
+struct RayHit
+{
+    float3 position;
+    float distance;
+
+    float2 barycentric;
+    uint triIndex;
+    uint triAddr;
+
+    float3 normal;
+    uint steps;
+
+    float3 tangent;
+    float eta;
+
+    float3 ffnormal;
+    uint intersectType;
+
+    float2 uv;
+    float2 padding2;
+
+    Material material;
+};
 
 float Luminance(float3 color)
 {
@@ -152,26 +214,17 @@ float4 ExtractBytes(float value)
 
 float select(float f, float t, bool c)
 {
-    if (c)
-        return t;
-    else
-        return f;
+    return c ? t : f;
 }
 
 float3 select(float3 f, float3 t, bool c)
 {
-    if (c)
-        return t;
-    else
-        return f;
+    return c ? t : f;
 }
 
 float4 select(float4 f, float4 t, bool c)
 {
-    if (c)
-        return t;
-    else
-        return f;
+    return c ? t : f;
 }
 
 bool isless(float4 a, float4 b)
@@ -247,7 +300,9 @@ void ConcentricSampleDisk(float u1, float u2, out float dx, out float dy)
                 // Handle third region of disk
                 r = -sx;
                 theta = 4.0 - sy / r;
-            } else {
+            }
+            else
+            {
                 // Handle fourth region of disk
                 r = -sy;
                 theta = 6.0 + sx / r;
@@ -312,6 +367,29 @@ float3 ToWorld(float3x3 basis, float3 local)
 float3 ToLocal(float3x3 basis, float3 world)
 {
     return float3(dot(basis[0], world), dot(basis[1], world), dot(basis[2], world));
+}
+
+float RectIntersect(in float3 pos, in float3 u, in float3 v, in float4 plane, in Ray r)
+{
+    float3 n = plane.xyz;
+    float dt = dot(r.direction, n);
+    float t = (plane.w - dot(n, r.origin)) / dt;
+    float res = FAR_PLANE;
+
+    if (t > EPSILON)
+    {
+        float3 p = r.origin + r.direction * t;
+        float3 vi = p - pos;
+        float a1 = dot(u, vi);
+        if (a1 >= 0.0 && a1 <= 1.0)
+        {
+            float a2 = dot(v, vi);
+            if (a2 >= 0.0 && a2 <= 1.0)
+                res = t;
+        }
+    }
+
+    return res;
 }
 
 #endif // __UNITY_PATHTRACER_COMMON__
