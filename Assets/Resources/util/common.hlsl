@@ -369,27 +369,4 @@ float3 ToLocal(float3x3 basis, float3 world)
     return float3(dot(basis[0], world), dot(basis[1], world), dot(basis[2], world));
 }
 
-float RectIntersect(in float3 pos, in float3 u, in float3 v, in float4 plane, in Ray r)
-{
-    float3 n = plane.xyz;
-    float dt = dot(r.direction, n);
-    float t = (plane.w - dot(n, r.origin)) / dt;
-    float res = FAR_PLANE;
-
-    if (t > EPSILON)
-    {
-        float3 p = r.origin + r.direction * t;
-        float3 vi = p - pos;
-        float a1 = dot(u, vi);
-        if (a1 >= 0.0 && a1 <= 1.0)
-        {
-            float a2 = dot(v, vi);
-            if (a2 >= 0.0 && a2 <= 1.0)
-                res = t;
-        }
-    }
-
-    return res;
-}
-
 #endif // __UNITY_PATHTRACER_COMMON__

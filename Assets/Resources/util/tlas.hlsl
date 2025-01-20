@@ -2,6 +2,7 @@
 #define __UNITY_PATHTRACER_TLAS_HLSL__
 
 #include "common.hlsl"
+#include "intersect.hlsl"
 #include "material.hlsl"
 #include "random.hlsl"
 #include "triangle_attributes.hlsl"
@@ -163,11 +164,8 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
     return hitmask;
 }
 
-RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
+bool RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay, inout RayHit hit)
 {
-    RayHit hit = (RayHit)0;
-    hit.distance = FAR_PLANE;
-
     float3 invDir = SafeRcp(ray.direction);
     uint octinv4 = (7 - ((ray.direction.x < 0 ? 4 : 0) | (ray.direction.y < 0 ? 2 : 0) | (ray.direction.z < 0 ? 1 : 0))) * 0x1010101;
 
@@ -245,6 +243,7 @@ RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
 
+        hit.intersectType = INTERSECT_TRIANGLE;
         hit.position = ray.origin + hit.distance * ray.direction;
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
 
@@ -260,7 +259,7 @@ RayHit RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay)
         hit.material = GetMaterial(Materials[instance.materialIndex], ray, hit);
     }
 
-    return hit;
+    return hit.distance < FAR_PLANE;
 }
 
 void RayIntersectTLAS_Instance(const GPUInstance instance, const Ray ray, bool isShadowRay, inout RayHit hit)
@@ -269,30 +268,22 @@ void RayIntersectTLAS_Instance(const GPUInstance instance, const Ray ray, bool i
     const float3 lO = mul(worldToLocal, float4(ray.origin, 1.0f)).xyz;
     const float3 lD = normalize(mul(worldToLocal, float4(ray.direction, 0.0f)).xyz);
     Ray rayLocal = { lO, lD };
-    RayHit blasHit = RayIntersectBvh(rayLocal, instance, isShadowRay);
-    if (blasHit.distance < hit.distance)
-        hit = blasHit;
+    RayIntersectBvh(rayLocal, instance, isShadowRay, hit);
 }
 
-RayHit RayIntersectTLAS_NoAccel(const Ray ray, bool isShadowRay)
+bool RayIntersectTLAS_NoAccel(const Ray ray, inout RayHit hit, bool isShadowRay)
 {
-    RayHit hit = (RayHit)0;
-    hit.distance = FAR_PLANE;
-
     for (uint i = 0; i < GPUInstanceCount; i++)
     {
         const GPUInstance instance = GPUInstances[i];
         RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
     }
 
-    return hit;
+    return hit.distance < FAR_PLANE;
 }
 
-RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
+bool RayIntersectTLAS(const Ray ray, inout RayHit hit, bool isShadowRay)
 {
-    RayHit hit = (RayHit)0;
-    hit.distance = FAR_PLANE;
-
     const float3 O = ray.origin;
     const float3 D = normalize(ray.direction);
     const float3 rD = SafeRcp(D);
@@ -303,7 +294,7 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
     bool inLoop = true;
     while (inLoop)
     {
-        TLASNode node = TLASNodes[nodeIndex];
+        const TLASNode node = TLASNodes[nodeIndex];
         const uint instanceCount = node.instanceCount;
         if (instanceCount > 0)
         {
@@ -385,19 +376,26 @@ RayHit RayIntersectTLAS(const Ray ray, bool isShadowRay)
         }
     }
 
-    return hit;
+    return hit.distance < FAR_PLANE;
 }
 
-RayHit RayIntersect(in Ray ray)
+bool RayIntersect(in Ray ray, inout RayHit hit)
 {
-    //return RayIntersectTLAS_NoAccel(ray, false);
-    return RayIntersectTLAS(ray, false);
+    hit.distance = FAR_PLANE;
+
+    RayIntersectTLAS_NoAccel(ray, hit, false);
+    //RayIntersectTLAS(ray, hit, false);
+
+    IntersectLights(ray, hit);
+
+    return hit.distance < FAR_PLANE;
 }
 
 bool ShadowRayIntersect(in Ray ray)
 {
-    RayHit hit = RayIntersectTLAS(ray, true);
-    return hit.distance < FAR_PLANE;
+    RayHit hit = (RayHit)0;
+    hit.distance = FAR_PLANE;
+    return RayIntersectTLAS(ray, hit, true);
 }
 
 #endif // __UNITY_PATHTRACER_TLAS_HLSL__

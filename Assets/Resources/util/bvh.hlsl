@@ -2,6 +2,7 @@
 #define __UNITY_PATHTRACER_BVH_HLSL__
 
 #include "common.hlsl"
+#include "intersect.hlsl"
 #include "material.hlsl"
 #include "random.hlsl"
 #include "triangle_attributes.hlsl"
@@ -253,29 +254,7 @@ bool RayIntersect(in Ray ray, inout RayHit hit)
 
     RayIntersectBvh(ray, hit, false);
 
-#if HAS_LIGHTS
-    for (int i = 0; i < LightCount; ++i)
-    {
-        Light light = Lights[i];
-        if (light.type == LIGHT_TYPE_RECTANGLE)
-        {
-            float3 normal = normalize(cross(light.u, light.v));
-            float4 plane = float4(normal, dot(normal, light.position));
-            float3 u = light.u / dot(light.u, light.u);
-            float3 v = light.v / dot(light.v, light.v);
-            float d = RectIntersect(light.position, u, v, plane, ray);
-            if (d > 0.0 && d < hit.distance && dot(normal, ray.direction) < 0.0)
-            {
-                hit.distance = d;
-                hit.position = ray.origin + d * ray.direction;
-                hit.normal = normal;
-                hit.ffnormal = dot(hit.normal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
-                hit.triIndex = i;
-                hit.intersectType = INTERSECT_LIGHT;
-            }
-        }
-    }
-#endif
+    IntersectLights(ray, hit);
 
     return hit.distance < FAR_PLANE;
 }
