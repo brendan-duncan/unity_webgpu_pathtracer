@@ -119,10 +119,10 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
     float3 Ld = 0.0f;
     float3 scatterPos = hit.position + hit.normal * EPSILON;
 
-    //ScatterSampleRec scatterSample = (ScatterSampleRec)0;
-    /*if (EnvironmentMode == 0)
+    ScatterSampleRec scatterSample = (ScatterSampleRec)0;
+    if (EnvironmentMode == 0)
     {
-        #if HAS_ENVIRONMENT_TEXTURE
+#if HAS_ENVIRONMENT_TEXTURE
         float3 Li = 0.0f;
         float4 dirPdf = SampleEnvMap(Li, rngState);
         float3 lightDir = dirPdf.xyz;
@@ -139,7 +139,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
                     Ld += misWeight * Li * scatterSample.f * EnvironmentIntensity / lightPdf;
             }
         }
-        #else // HAS_ENVIRONMENT_TEXTURE
+#else // HAS_ENVIRONMENT_TEXTURE
         float3 Li = EnvironmentColor * EnvironmentIntensity;
         float lightPdf = 1.0f / (4.0f * PI);
         float3 lightDir = normalize(RandomCosineHemisphere(hit.normal, rngState));
@@ -155,27 +155,8 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
                     Ld += misWeight * Li * scatterSample.f / lightPdf;
             }
         }
-        #endif // HAS_ENVIRONMENT_TEXTURE
+#endif // HAS_ENVIRONMENT_TEXTURE
     }
-    else
-    {
-        float3 lightDir = normalize(RandomCosineHemisphere(hit.normal, rngState));
-        float4 lightColorPdf = StandardSky(lightDir, EnvironmentIntensity);
-        float3 Li = lightColorPdf.rgb;
-        float lightPdf = lightColorPdf.w;
-        Ray shadowRay = {scatterPos, lightDir};
-        bool inShadow = ShadowRayIntersect(shadowRay);
-        if (!inShadow)
-        {
-            scatterSample.f = EvalBRDF(hit, mat, -ray.direction, hit.ffnormal, lightDir, scatterSample.pdf);
-            if (scatterSample.pdf > 0.0)
-            {
-                float misWeight = PowerHeuristic(lightPdf, scatterSample.pdf);
-                if (misWeight > 0.0)
-                    Ld += misWeight * Li * scatterSample.f / lightPdf;
-            }
-        }
-    }*/
 
 #if HAS_LIGHTS
     LightSampleRec lightSample = (LightSampleRec)0;

@@ -141,15 +141,16 @@ extern "C" int GetTLASNodesSize(int index)
     return bvh != nullptr ? bvh->usedNodes * 16 * 4 : 0;
 }
 
-extern "C" bool GetTLASData(int index, tinybvh::bvhvec4** bvhNodes)
+extern "C" bool GetTLASData(int index, tinybvh::bvhvec4** tlasNodes, uint32_t** tlasIndices)
 {
-    tinybvh::BVH_GPU* bvh = GetTLAS(index);
-    if (bvh == nullptr)
+    tinybvh::BVH_GPU* tlas = GetTLAS(index);
+    if (tlas == nullptr)
         return false;
 
-    if (bvh->bvhNode)
+    if (tlas->bvhNode)
     {
-        *bvhNodes = (tinybvh::bvhvec4*)bvh->bvhNode;
+        *tlasNodes = (tinybvh::bvhvec4*)tlas->bvhNode;
+        *tlasIndices = tlas->bvh.triIdx;
         return true;
     }
 

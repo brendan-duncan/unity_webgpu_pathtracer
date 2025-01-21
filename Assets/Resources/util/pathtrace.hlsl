@@ -45,8 +45,10 @@ float3 PathTrace(Ray ray, inout uint rngState)
         }
 #endif
 
-        // Test if the normal and tangent are orthogonal to each other.
-        /*float3 N = normalize(hit.normal);
+        // Debug hit properties
+        //radiance = hit.distance / 20.0f;
+        //break;
+        /*float3 N = hit.normal;
         float3 T = normalize(hit.tangent);
         if (abs(dot(N, T)) < EPSILON)
         {
@@ -57,7 +59,8 @@ float3 PathTrace(Ray ray, inout uint rngState)
         Material material = hit.material;
 
         // Debug a material or intersection property
-        //radiance = material.baseColor;
+        //radiance = material.emission;
+        //radiance = hit.normal;
         //break;
 
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled

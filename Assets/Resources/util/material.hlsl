@@ -38,10 +38,10 @@ float4 SampleTexture(int textureIndex, float2 uv, bool linearSample)
 
         float u = uv.x;
         float v = uv.y;
-        if (u > 1.0f || u < 0.0f)
-            u = fmod(u, 1.0f);
-        if (v > 1.0f || v < 0.0f)
-            v = fmod(v, 1.0f);
+        while (u > 1.0f)
+            u -= 1.0f;
+        while (v > 1.0f)
+            v -= 1.0f;
         while (u < 0.0f)
             u += 1.0f;
         while (v < 0.0f)

@@ -24,5 +24,5 @@ extern "C"
     extern PLUGIN_FN void DestroyTLAS(int index);
     extern PLUGIN_FN bool IsTLASReady(int index);
     extern PLUGIN_FN int GetTLASNodesSize(int index);
-    extern PLUGIN_FN bool GetTLASData(int index, tinybvh::bvhvec4** bvhNodes);
+    extern PLUGIN_FN bool GetTLASData(int index, tinybvh::bvhvec4** tlasNodes, uint32_t** tlasIndices);
 }

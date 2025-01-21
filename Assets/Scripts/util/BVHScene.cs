@@ -99,6 +99,7 @@ public class BVHScene
 
     int _gpuInstanceCount = 0;
     ComputeBuffer _tlasNodesBuffer;
+    ComputeBuffer _tlasIndicesBuffer;
     ComputeBuffer _gpuInstancesBuffer;
 #endif
 
@@ -130,6 +131,7 @@ public class BVHScene
 
 #if USE_TLAS
         _tlasNodesBuffer?.Release();
+        _tlasIndicesBuffer?.Release();
         _gpuInstancesBuffer?.Release();
 #endif
     }
@@ -165,6 +167,7 @@ public class BVHScene
         cmd.SetComputeBufferParam(shader, kernelIndex, "Materials", _materialsBuffer);
 #if USE_TLAS
         cmd.SetComputeBufferParam(shader, kernelIndex, "TLASNodes", _tlasNodesBuffer);
+        cmd.SetComputeBufferParam(shader, kernelIndex, "TLASIndices", _tlasIndicesBuffer);
         cmd.SetComputeBufferParam(shader, kernelIndex, "GPUInstances", _gpuInstancesBuffer);
         cmd.SetComputeIntParam(shader, "GPUInstanceCount", _gpuInstanceCount);
 #endif
@@ -719,11 +722,12 @@ public class BVHScene
         int tlasIndex = TinyBVH.BuildTLAS(blasInstancesCPtr, _blasInstances.Length);
         Debug.Log($"Total Instances: {_blasInstances.Length} Instanced Triangles: {totalInstancedTriangles:n0}");
 
-        if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr))
+        if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr, out IntPtr tlasIndicesPtr))
         {
             int tlasNodeSize = TinyBVH.GetTLASNodesSize(tlasIndex);
-            Debug.Log($"TLAS Nodes Size: {tlasNodeSize:n0}  Buffer Size: {tlasNodeSize:n0} bytes");
+            Debug.Log($"TLAS Nodes Size: {tlasNodeSize:n0}  Buffer Size: {tlasNodeSize:n0} {tlasIndicesPtr} bytes");
             Utilities.UploadFromPointer(ref _tlasNodesBuffer, tlasNodesPtr, tlasNodeSize, 4);
+            Utilities.UploadFromPointer(ref _tlasIndicesBuffer, tlasIndicesPtr, _blasInstances.Length * 4, 4);
         }
 
         blasInstancesPtr.Dispose();
@@ -802,10 +806,11 @@ public class BVHScene
 
         int tlasIndex = TinyBVH.BuildTLAS(blasInstancesCPtr, _gpuInstanceCount);
 
-        if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr))
+        if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr, out IntPtr tlasIndicesPtr))
         {
             int tlasNodeSize = TinyBVH.GetTLASNodesSize(tlasIndex);
             Utilities.UploadFromPointer(ref _tlasNodesBuffer, tlasNodesPtr, tlasNodeSize, 4);
+            Utilities.UploadFromPointer(ref _tlasIndicesBuffer, tlasIndicesPtr, _blasInstances.Length * 4, 4);
         }
 
         blasInstancesPtr.Dispose();

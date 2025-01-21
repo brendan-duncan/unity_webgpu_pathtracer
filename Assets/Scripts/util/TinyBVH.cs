@@ -47,5 +47,5 @@ public class TinyBVH
     public static extern int GetTLASNodesSize(int index);
 
     [DllImport(libraryName)]
-    public static extern bool GetTLASData(int index, out IntPtr bvhNodes);
+    public static extern bool GetTLASData(int index, out IntPtr tlasNodes, out IntPtr tlasIndices);
 }

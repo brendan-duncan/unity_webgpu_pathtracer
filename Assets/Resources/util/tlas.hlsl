@@ -39,10 +39,10 @@ struct TLASNode
     uint firstInstance;
 };
 
-bool BackfaceCulling;
 uint GPUInstanceCount;
 
 StructuredBuffer<TLASNode> TLASNodes;
+StructuredBuffer<uint> TLASIndices;
 StructuredBuffer<GPUInstance> GPUInstances;
 StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;
@@ -60,42 +60,45 @@ float3 InterpolateAttribute(float2 barycentric, float3 attr0, float3 attr1, floa
     return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
 }
 
-void IntersectTriangle(const GPUInstance instance, int triAddr, const Ray ray, inout RayHit hit)
+bool IntersectTriangle(const GPUInstance instance, int triAddr, const Ray ray, inout RayHit hit)
 {
+    bool hitFound = false;
     float3 v0 = BVHTris[triAddr + 2].xyz;
     float3 e1 = BVHTris[triAddr + 1].xyz;
     float3 e2 = BVHTris[triAddr + 0].xyz;
 
-    float3 r = cross(ray.direction.xyz, e2);
+    float3 r = cross(ray.direction, e2);
     float a = dot(e1, r);
 
     if (abs(a) > 0.0000001f)
     {
         float f = 1.0f / a;
-        float3 s = ray.origin.xyz - v0;
+        float3 s = ray.origin - v0;
         float u = f * dot(s, r);
 
         if (u >= 0.0f && u <= 1.0f)
         {
             float3 q = cross(s, e1);
-            float v = f * dot(ray.direction.xyz, q);
+            float v = f * dot(ray.direction, q);
 
             if (v >= 0.0f && u + v <= 1.0f)
             {
-                float d = f * dot(e2, q);
+                float distance = f * dot(e2, q);
 
-                if (d > 0.0001f && d < hit.distance)
+                if (distance > 0.0f && distance < hit.distance)
                 {
                     uint triIndex = instance.triAttributeOffset + asuint(BVHTris[triAddr + 2].w);
-                    float2 barycentric = float2(u, v);
-                    hit.barycentric = barycentric;
+                    hit.barycentric = float2(u, v);
                     hit.triAddr = triAddr;
                     hit.triIndex = triIndex;
-                    hit.distance = d;
+                    hit.distance = distance;
+                    hitFound = true;
                 }
             }
         }
     }
+
+    return hitFound;
 }
 
 
@@ -164,10 +167,18 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
     return hitmask;
 }
 
-bool RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay, inout RayHit hit)
+bool RayIntersectBvh(const Ray worldRay, in GPUInstance instance, bool isShadowRay, inout RayHit hit)
 {
-    float3 invDir = SafeRcp(ray.direction);
-    uint octinv4 = (7 - ((ray.direction.x < 0 ? 4 : 0) | (ray.direction.y < 0 ? 2 : 0) | (ray.direction.z < 0 ? 1 : 0))) * 0x1010101;
+    const float4x4 worldToLocal = instance.worldToLocal;
+    const float3 localOrigin = mul(worldToLocal, float4(worldRay.origin, 1.0f)).xyz;
+    // To handle instance scale, transform the ray direction to local space but do not normalize it
+    const float3 localDirection = mul(worldToLocal, float4(worldRay.direction, 0.0f)).xyz;
+    const Ray localRay = { localOrigin, localDirection };
+
+    float3 invDir = rcp(localRay.direction);
+    uint octinv4 = (7 - ((localRay.direction.x < 0 ? 4 : 0) | (localRay.direction.y < 0 ? 2 : 0) | (localRay.direction.z < 0 ? 1 : 0))) * 0x1010101;
+
+    bool hitFound = false;
 
     uint2 stack[BVH_STACK_SIZE];
     uint stackPtr = 0;
@@ -175,7 +186,6 @@ bool RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay, i
     // Use 0x80000001 instead.
     uint2 nodeGroup = uint2(0, 0x80000001);
     uint2 triGroup = uint2(0, 0);
-    int count = 0;
 
     const int nodeOffset = instance.bvhOffset;
 
@@ -187,7 +197,7 @@ bool RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay, i
             if (nodeGroup.y == 0x80000001)
                 nodeGroup.y -= 1;
 
-            count += 1;
+            hit.steps++;
             uint mask = nodeGroup.y;
             uint childBitIndex = firstbithigh(mask);
             uint childNodeBaseIndex = nodeGroup.x;
@@ -201,7 +211,7 @@ bool RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay, i
             uint childNodeIndex = childNodeBaseIndex + relativeIndex;
 
             BVHNode node = BVHNodes[nodeOffset + childNodeIndex];
-            uint hitmask = IntersectCWBVHNode(ray.origin, invDir, octinv4, hit.distance, node);
+            uint hitmask = IntersectCWBVHNode(localRay.origin, invDir, octinv4, hit.distance, node);
 
             nodeGroup.x = asuint(node.n1.x);
             nodeGroup.y = (hitmask & 0xFF000000) | (asuint(node.n0.w) >> 24);
@@ -218,12 +228,12 @@ bool RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay, i
         // Process all triangles in the current group
         while (triGroup.y != 0)
         {
-            count += 4;
+            hit.steps += 4;
             int triangleIndex = firstbithigh(triGroup.y);
             int triAddr = triGroup.x + (triangleIndex * 3);
 
             // Check intersection and update hit if its closer
-            IntersectTriangle(instance, instance.triOffset + triAddr, ray, hit);
+            hitFound = IntersectTriangle(instance, instance.triOffset + triAddr, localRay, hit) | hitFound;
 
             triGroup.y -= 1 << triangleIndex;
         }
@@ -237,90 +247,63 @@ bool RayIntersectBvh(const Ray ray, in GPUInstance instance, bool isShadowRay, i
         }
     }
 
-    hit.steps = count;
-
-    if (!isShadowRay && hit.distance < FAR_PLANE)
+    if (!isShadowRay && hitFound)
     {
         TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
 
         hit.intersectType = INTERSECT_TRIANGLE;
-        hit.position = ray.origin + hit.distance * ray.direction;
+
+        // To handle instance scale, get the local space hit position and transform it back to world space
+        hit.position = mul(instance.localToWorld, float4(localRay.origin + hit.distance * localRay.direction, 1.0f)).xyz;
+        hit.distance = length(hit.position - worldRay.origin);
+
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
 
         float3 normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
         // Use the transposed inverse to transform the normal to world space
-        normal = normalize(mul(float4(normal, 0.0f), instance.worldToLocal).xyz);
-        hit.normal = normal;
+        hit.normal = normalize(mul(float4(normal, 0.0f), instance.worldToLocal).xyz);
 
         float3 tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
-        tangent = normalize(mul(float4(tangent, 0.0f), instance.worldToLocal).xyz);
-        hit.tangent = tangent;
+        hit.tangent = normalize(mul(instance.localToWorld, float4(tangent, 0.0f)).xyz);
 
-        hit.material = GetMaterial(Materials[instance.materialIndex], ray, hit);
+        hit.material = GetMaterial(Materials[instance.materialIndex], worldRay, hit);
+
+        hit.ffnormal = dot(hit.normal, worldRay.direction) <= 0.0 ? hit.normal : -hit.normal;
+        hit.eta = (dot(worldRay.direction, hit.normal) < 0.0) ? 1.0f / hit.material.ior : hit.material.ior;
     }
 
     return hit.distance < FAR_PLANE;
-}
-
-void RayIntersectTLAS_Instance(const GPUInstance instance, const Ray ray, bool isShadowRay, inout RayHit hit)
-{
-    const float4x4 worldToLocal = instance.worldToLocal;
-    const float3 lO = mul(worldToLocal, float4(ray.origin, 1.0f)).xyz;
-    const float3 lD = normalize(mul(worldToLocal, float4(ray.direction, 0.0f)).xyz);
-    Ray rayLocal = { lO, lD };
-    RayIntersectBvh(rayLocal, instance, isShadowRay, hit);
 }
 
 bool RayIntersectTLAS_NoAccel(const Ray ray, inout RayHit hit, bool isShadowRay)
 {
+    bool hitFound = false;
     for (uint i = 0; i < GPUInstanceCount; i++)
     {
         const GPUInstance instance = GPUInstances[i];
-        RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
+        hitFound = RayIntersectBvh(ray, instance, isShadowRay, hit) | hitFound;
     }
 
-    return hit.distance < FAR_PLANE;
+    return hitFound;
 }
 
 bool RayIntersectTLAS(const Ray ray, inout RayHit hit, bool isShadowRay)
 {
     const float3 O = ray.origin;
     const float3 D = normalize(ray.direction);
-    const float3 rD = SafeRcp(D);
+    const float3 rD = rcp(D);
 
-    uint nodeIndex = 0;
+    bool hitFound = false;
     uint stack[BVH_STACK_SIZE];
+    uint nodeIndex = 0;
     uint stackPtr = 0;
-    bool inLoop = true;
-    while (inLoop)
+
+    while (true)
     {
         const TLASNode node = TLASNodes[nodeIndex];
         const uint instanceCount = node.instanceCount;
-        if (instanceCount > 0)
-        {
-            const uint firstInstance = node.firstInstance;
-            //const uint firstInstance = 1;
 
-            // Setting this will show the bounding box of the TLAS is being intersected.
-            //hit.distance = 1.0;
-
-            // This will show the instances can be intersected.
-            //RayIntersectTLAS_Instance(GPUInstances[0], ray, isShadowRay, hit);
-
-            // process leaf node
-            for (uint i = 0; i < instanceCount; i++)
-            {
-                const uint instanceIndex = firstInstance + i;
-                const GPUInstance instance = GPUInstances[instanceIndex];
-                RayIntersectTLAS_Instance(instance, ray, isShadowRay, hit);
-            }
-
-            if (stackPtr > 0)
-                nodeIndex = stack[--stackPtr];
-            else
-                inLoop = false;
-        }
-        else
+        if (instanceCount == 0)
         {
             uint left = node.left;
             const float3 lmin = node.lmin;
@@ -365,7 +348,7 @@ bool RayIntersectTLAS(const Ray ray, inout RayHit hit, bool isShadowRay)
                 if (stackPtr > 0)
                     nodeIndex = stack[--stackPtr];
                 else
-                    inLoop = false;
+                    break;
             }
             else
             {
@@ -374,17 +357,35 @@ bool RayIntersectTLAS(const Ray ray, inout RayHit hit, bool isShadowRay)
                     stack[stackPtr++] = right;
             }
         }
+        else
+        {
+            const uint firstInstance = node.firstInstance;
+
+            for (uint i = 0; i < instanceCount; ++i)
+            {
+                const uint instanceIndex = TLASIndices[firstInstance + i];
+
+                const GPUInstance instance = GPUInstances[instanceIndex];
+                hitFound = RayIntersectBvh(ray, instance, isShadowRay, hit) | hitFound;
+            }
+
+            if (stackPtr > 0)
+                nodeIndex = stack[--stackPtr];
+            else
+                break;
+        }
     }
 
-    return hit.distance < FAR_PLANE;
+    return hitFound;
 }
 
 bool RayIntersect(in Ray ray, inout RayHit hit)
 {
+    hit.steps = 0;
     hit.distance = FAR_PLANE;
 
-    RayIntersectTLAS_NoAccel(ray, hit, false);
-    //RayIntersectTLAS(ray, hit, false);
+    //RayIntersectTLAS_NoAccel(ray, hit, false);
+    RayIntersectTLAS(ray, hit, false);
 
     IntersectLights(ray, hit);
 
@@ -395,6 +396,7 @@ bool ShadowRayIntersect(in Ray ray)
 {
     RayHit hit = (RayHit)0;
     hit.distance = FAR_PLANE;
+    hit.steps = 0;
     return RayIntersectTLAS(ray, hit, true);
 }
 
