@@ -96,7 +96,7 @@ float3 EvalLight(in Ray ray, in RayHit hit, in Material mat, in Light light, in 
     float3 Li = light.emission * falloff;
     float3 Ld = 0.0f;
 
-    Ray shadowRay = {scatterPos, lightSample.direction};
+    Ray shadowRay = {scatterPos, 0.0f, lightSample.direction, 0.0f};
     bool inShadow = ShadowRayIntersect(shadowRay);
     if (!inShadow)
     {
@@ -127,7 +127,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
         float4 dirPdf = SampleEnvMap(Li, rngState);
         float3 lightDir = dirPdf.xyz;
         float lightPdf = dirPdf.w;
-        Ray shadowRay = {scatterPos, lightDir};
+        Ray shadowRay = {scatterPos, 0.0f, lightDir, 0.0f};
         bool inShadow = ShadowRayIntersect(shadowRay);
         if (!inShadow)
         {
@@ -143,7 +143,7 @@ float3 DirectLight(in Ray ray, in RayHit hit, in Material mat, inout uint rngSta
         float3 Li = EnvironmentColor * EnvironmentIntensity;
         float lightPdf = 1.0f / (4.0f * PI);
         float3 lightDir = normalize(RandomCosineHemisphere(hit.normal, rngState));
-        Ray shadowRay = {scatterPos, lightDir};
+        Ray shadowRay = {scatterPos, 0.0f, lightDir, 0.0f};
         bool inShadow = ShadowRayIntersect(shadowRay);
         if (!inShadow)
         {

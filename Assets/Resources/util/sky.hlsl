@@ -84,6 +84,7 @@ float4 SampleEnvMap(out float3 color, inout uint rngState)
 #if HAS_ENVIRONMENT_TEXTURE
     float rnd = RandomFloat(rngState) * EnvironmentCdfSum;
     float2 uv = BinarySearch(rnd);
+    uv.y = 1.0f - uv.y;
 
     color = EnvironmentTexture.SampleLevel(samplerEnvironmentTexture, uv, 0).rgb;
     float pdf = Luminance(color) / EnvironmentCdfSum;

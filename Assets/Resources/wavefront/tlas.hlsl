@@ -1,10 +1,7 @@
 #ifndef __UNITY_PATHTRACER_TLAS_HLSL__
 #define __UNITY_PATHTRACER_TLAS_HLSL__
 
-#include "common.hlsl"
-#include "intersect.hlsl"
-#include "material.hlsl"
-#include "random.hlsl"
+#include "ray.hlsl"
 #include "triangle_attributes.hlsl"
 
 struct GPUInstance
@@ -173,7 +170,7 @@ bool RayIntersectBvh(const Ray worldRay, in GPUInstance instance, bool isShadowR
     const float3 localOrigin = mul(worldToLocal, float4(worldRay.origin, 1.0f)).xyz;
     // To handle instance scale, transform the ray direction to local space but do not normalize it
     const float3 localDirection = mul(worldToLocal, float4(worldRay.direction, 0.0f)).xyz;
-    const Ray localRay = { localOrigin, 0.0f, localDirection, 0.0f };
+    const Ray localRay = { localOrigin, localDirection };
 
     float3 invDir = rcp(localRay.direction);
     uint octinv4 = (7 - ((localRay.direction.x < 0 ? 4 : 0) | (localRay.direction.y < 0 ? 2 : 0) | (localRay.direction.z < 0 ? 1 : 0))) * 0x1010101;

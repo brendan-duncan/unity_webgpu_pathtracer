@@ -23,6 +23,7 @@ uint MaterialIndex;
 uint TriangleCount; 
 uint OutputTriangleStart;
 float4x4 LocalToWorld;
+float4x4 WorldToLocal;
 
 RWStructuredBuffer<float4> VertexPositionBuffer;
 RWStructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
@@ -108,9 +109,11 @@ void ProcessMesh(uint3 id : SV_DispatchThreadID)
         attr.normal2 = ReadVertexNormal(vertIndices.z);
 
         // Transform normals to world space
-        attr.normal0 = normalize(mul(LocalToWorld, float4(attr.normal0.xyz, 0)).xyz);
-        attr.normal1 = normalize(mul(LocalToWorld, float4(attr.normal1.xyz, 0)).xyz);
-        attr.normal2 = normalize(mul(LocalToWorld, float4(attr.normal2.xyz, 0)).xyz);
+        attr.normal0 = normalize(mul(float4(attr.normal0.xyz, 0), WorldToLocal).xyz);
+        attr.normal1 = normalize(mul(float4(attr.normal1.xyz, 0), WorldToLocal).xyz);
+        attr.normal2 = normalize(mul(float4(attr.normal2.xyz, 0), WorldToLocal).xyz);
+        //attr.normal1 = normalize(mul(LocalToWorld, float4(attr.normal1.xyz, 0)).xyz);
+        //attr.normal2 = normalize(mul(LocalToWorld, float4(attr.normal2.xyz, 0)).xyz);
     #endif
 
     #if HAS_TANGENTS

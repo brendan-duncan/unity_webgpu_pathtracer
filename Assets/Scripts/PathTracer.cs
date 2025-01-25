@@ -21,6 +21,7 @@ public enum EnvironmentMode {
 [RequireComponent(typeof(Camera))]
 public class PathTracer : MonoBehaviour
 {
+    public bool useTLAS = false;
     public int samplesPerPass = 1;
     public int maxSamples = 100000;
     public int maxRayBounces = 5;
@@ -90,7 +91,7 @@ public class PathTracer : MonoBehaviour
         _bvhScene = new BVHScene();
         _cmd = new CommandBuffer();
 
-        _bvhScene.Start();
+        _bvhScene.Start(useTLAS);
 
         _pathTracerShader = Resources.Load<ComputeShader>("PathTracer");
         _presentationMaterial = new Material(Resources.Load<Shader>("Presentation"));

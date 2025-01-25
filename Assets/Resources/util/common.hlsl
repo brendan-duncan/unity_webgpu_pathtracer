@@ -143,7 +143,9 @@ StructuredBuffer<Light> Lights;
 struct Ray
 {
     float3 origin;
+    float padding1;
     float3 direction;
+    float padding2;
 };
 
 #define INTERSECT_TRIANGLE 0

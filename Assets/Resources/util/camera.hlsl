@@ -37,7 +37,7 @@ Ray GetScreenRay(float2 pixelCoords, inout uint rngState)
         direction = normalize(focalPoint - origin);
     }
 
-    Ray ray = {origin, direction};
+    Ray ray = {origin, 0.0f, direction, 0.0f};
     return ray;
 }
 
