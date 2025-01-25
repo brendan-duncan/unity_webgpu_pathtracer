@@ -150,7 +150,7 @@ extern "C" bool GetTLASData(int index, tinybvh::bvhvec4** tlasNodes, uint32_t** 
     if (tlas->bvhNode)
     {
         *tlasNodes = (tinybvh::bvhvec4*)tlas->bvhNode;
-        *tlasIndices = tlas->bvh.triIdx;
+        *tlasIndices = tlas->bvh.primIdx;
         return true;
     }
 

@@ -80,6 +80,8 @@ public class PathTracer : MonoBehaviour
     void Start()
     {
         _camera = GetComponent<Camera>();
+        if (!_camera)
+            return;
 
         // Disable normal camera rendering since we will be replacing the image with our own
         _camera.cullingMask = 0;
@@ -131,6 +133,128 @@ public class PathTracer : MonoBehaviour
         UpdateLights();
     }
 
+    void OnDestroy()
+    {
+        _bvhScene?.OnDestroy();
+        _bvhScene = null;
+        _outputRT[0]?.Release();
+        _outputRT[1]?.Release();
+        _cmd?.Release();
+        _environmentCdfBuffer?.Release();
+        _envTextureCopy?.Release();
+        _envTextureCopy = null;
+        _lightBuffer?.Release();
+    }
+
+    void Update()
+    {
+        if (_bvhScene.UpdateTLAS())
+            Reset();
+
+        if (_lastEnvironmentMapRotation != environmentMapRotation ||
+            _lastAperture != aperture ||
+            _lastFocalLength != focalLength)
+        {
+            _lastEnvironmentMapRotation = environmentMapRotation;
+            _lastAperture = aperture;
+            _lastFocalLength = focalLength;
+            Reset();
+        }
+
+        //_pathTracerShader.DisableKeyword(_hasLightsKeyword);
+        UpdateLights();
+
+        _bvhScene.Update();
+        _pathTracerShader.SetKeyword(_hasTexturesKeyword, _bvhScene.HasTextures());
+    }
+
+    void OnRenderImage(RenderTexture source, RenderTexture destination)
+    {
+        if (!_bvhScene.CanRender() || !_environmentTextureReady)
+        {
+            Graphics.Blit(source, destination);
+            return;
+        }
+
+        _outputWidth = _camera.scaledPixelWidth;
+        _outputHeight = _camera.scaledPixelHeight;
+        int totalPixels = _outputWidth * _outputHeight;
+
+        // Using a 2D dispatch causes a warning for exceeding the number of temp variable registers.
+        // Using a 1D dispatch instead.
+        uint dx, dy, dz;
+        _pathTracerShader.GetKernelThreadGroupSizes(0, out dx, out dy, out dz);
+
+        // If dy > 1 then it's set up to do 2D tile dispatches.
+        // Otherwise, it's set up to do 1D dispatches over all the pixels.
+        int dispatchX = dy == 1 ? Mathf.CeilToInt(totalPixels / dx) : Mathf.CeilToInt(_outputWidth / dx);
+        int dispatchY = dy == 1 ? 1 : Mathf.CeilToInt(_outputHeight / dy);
+
+        // Prepare buffers and output texture
+        if (Utilities.PrepareRenderTexture(ref _outputRT[0], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
+            Reset();
+
+        if (Utilities.PrepareRenderTexture(ref _outputRT[1], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
+            Reset();
+
+        if (_cameraToWorldMatrix != _camera.cameraToWorldMatrix || _cameraProjectionMatrix != _camera.projectionMatrix)
+        {
+            _cameraToWorldMatrix = _camera.cameraToWorldMatrix;
+            _cameraProjectionMatrix = _camera.projectionMatrix;
+            Reset();
+        }
+
+        if (_currentSample < maxSamples)
+        {
+            _cmd.BeginSample("Path Tracer");
+
+            _bvhScene.PrepareShader(_cmd, _pathTracerShader, 0);
+
+            _cmd.SetComputeMatrixParam(_pathTracerShader, "CamInvProj", _cameraProjectionMatrix.inverse);
+            _cmd.SetComputeMatrixParam(_pathTracerShader, "CamToWorld", _cameraToWorldMatrix);
+            // Generate a random seed for each frame
+            _cmd.SetComputeIntParam(_pathTracerShader, "RngSeedRoot", (int)UnityEngine.Random.Range(0, uint.MaxValue));
+            _cmd.SetComputeIntParam(_pathTracerShader, "MaxRayBounces", Math.Max(maxRayBounces, 1));
+            _cmd.SetComputeIntParam(_pathTracerShader, "SamplesPerPass", Math.Max(1, samplesPerPass));
+            _cmd.SetComputeIntParam(_pathTracerShader, "OutputWidth", _outputWidth);
+            _cmd.SetComputeIntParam(_pathTracerShader, "OutputHeight", _outputHeight);
+            _cmd.SetComputeIntParam(_pathTracerShader, "CurrentSample", _currentSample);
+            _cmd.SetComputeIntParam(_pathTracerShader, "EnvironmentMode", (int)environmentMode);
+            _cmd.SetComputeFloatParam(_pathTracerShader, "EnvironmentIntensity", environmentIntensity);
+            _cmd.SetComputeVectorParam(_pathTracerShader, "EnvironmentColor", environmentColor);
+            _cmd.SetComputeFloatParam(_pathTracerShader, "EnvironmentMapRotation", environmentMapRotation);
+            _cmd.SetComputeFloatParam(_pathTracerShader, "FocalLength", focalLength);
+            _cmd.SetComputeFloatParam(_pathTracerShader, "Aperture", aperture);
+            _cmd.SetComputeTextureParam(_pathTracerShader, 0, "Output", _outputRT[_currentRT]);
+            _cmd.SetComputeTextureParam(_pathTracerShader, 0, "AccumulatedOutput", _outputRT[1 - _currentRT]);
+
+            _cmd.DispatchCompute(_pathTracerShader, 0, dispatchX, dispatchY, 1);
+            _cmd.EndSample("Path Tracer");
+        }
+
+        _presentationMaterial.SetTexture("_MainTex", _outputRT[_currentRT]);
+        _presentationMaterial.SetInt("OutputWidth", _outputWidth);
+        _presentationMaterial.SetInt("OutputHeight", _outputHeight);
+        _presentationMaterial.SetFloat("Exposure", exposure);
+        _presentationMaterial.SetInt("Mode", (int)tonemapMode);
+        _presentationMaterial.SetInt("sRGB", sRGB ? 1 : 0);
+        // Overwrite image with output from raytracer, applying tonemapping
+        _cmd.Blit(_outputRT[_currentRT], destination, _presentationMaterial);
+
+        if (_currentSample < maxSamples)
+            _currentSample += Math.Max(1, samplesPerPass);
+
+        if (_currentSample < maxSamples)
+            _currentRT = 1 - _currentRT;
+
+        Graphics.ExecuteCommandBuffer(_cmd);
+        _cmd.Clear();
+
+        // Unity complains if destination is not set as the current render target,
+        // which doesn't happen using the command buffer.
+        Graphics.SetRenderTarget(destination);
+    }
+
     unsafe void OnEnvTexReadback(AsyncGPUReadbackRequest request)
     {
         if (request.hasError)
@@ -165,41 +289,6 @@ public class PathTracer : MonoBehaviour
 
             _envTextureCPU.Dispose();
         }
-    }
-
-    void OnDestroy()
-    {
-        _bvhScene?.OnDestroy();
-        _bvhScene = null;
-        _outputRT[0]?.Release();
-        _outputRT[1]?.Release();
-        _cmd?.Release();
-        _environmentCdfBuffer?.Release();
-        _envTextureCopy?.Release();
-        _envTextureCopy = null;
-        _lightBuffer?.Release();
-    }
-
-    void Update()
-    {
-        if (_bvhScene.UpdateTLAS())
-            Reset();
-
-        if (_lastEnvironmentMapRotation != environmentMapRotation ||
-            _lastAperture != aperture ||
-            _lastFocalLength != focalLength)
-        {
-            _lastEnvironmentMapRotation = environmentMapRotation;
-            _lastAperture = aperture;
-            _lastFocalLength = focalLength;
-            Reset();
-        }
-
-        //_pathTracerShader.DisableKeyword(_hasLightsKeyword);
-        UpdateLights();
-
-        _bvhScene.Update();
-        _pathTracerShader.SetKeyword(_hasTexturesKeyword, _bvhScene.HasTextures());
     }
 
     public void Reset()
@@ -347,94 +436,5 @@ public class PathTracer : MonoBehaviour
     {
         _bvhScene.UpdateMaterialData(false);
         Reset();
-    }
-
-    void OnRenderImage(RenderTexture source, RenderTexture destination)
-    {
-        if (!_bvhScene.CanRender() || !_environmentTextureReady)
-        {
-            Graphics.Blit(source, destination);
-            return;
-        }
-
-        _outputWidth = _camera.scaledPixelWidth;
-        _outputHeight = _camera.scaledPixelHeight;
-        int totalPixels = _outputWidth * _outputHeight;
-
-        // Using a 2D dispatch causes a warning for exceeding the number of temp variable registers.
-        // Using a 1D dispatch instead.
-        uint dx, dy, dz;
-        _pathTracerShader.GetKernelThreadGroupSizes(0, out dx, out dy, out dz);
-
-        // If dy > 1 then it's set up to do 2D tile dispatches.
-        // Otherwise, it's set up to do 1D dispatches over all the pixels.
-        int dispatchX = dy == 1 ? Mathf.CeilToInt(totalPixels / dx) : Mathf.CeilToInt(_outputWidth / dx);
-        int dispatchY = dy == 1 ? 1 : Mathf.CeilToInt(_outputHeight / dy);
-
-        // Prepare buffers and output texture
-        if (Utilities.PrepareRenderTexture(ref _outputRT[0], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
-            Reset();
-
-        if (Utilities.PrepareRenderTexture(ref _outputRT[1], _outputWidth, _outputHeight, RenderTextureFormat.ARGBFloat))
-            Reset();
-
-        if (_cameraToWorldMatrix != _camera.cameraToWorldMatrix || _cameraProjectionMatrix != _camera.projectionMatrix)
-        {
-            _cameraToWorldMatrix = _camera.cameraToWorldMatrix;
-            _cameraProjectionMatrix = _camera.projectionMatrix;
-            Reset();
-        }
-
-        if (_currentSample < maxSamples)
-        {
-            _cmd.BeginSample("Path Tracer");
-            PrepareShader(_cmd, _pathTracerShader, 0);
-            _cmd.DispatchCompute(_pathTracerShader, 0, dispatchX, dispatchY, 1);
-            _cmd.EndSample("Path Tracer");
-        }
-
-        _presentationMaterial.SetTexture("_MainTex", _outputRT[_currentRT]);
-        _presentationMaterial.SetInt("OutputWidth", _outputWidth);
-        _presentationMaterial.SetInt("OutputHeight", _outputHeight);
-        _presentationMaterial.SetFloat("Exposure", exposure);
-        _presentationMaterial.SetInt("Mode", (int)tonemapMode);
-        _presentationMaterial.SetInt("sRGB", sRGB ? 1 : 0);
-        // Overwrite image with output from raytracer, applying tonemapping
-        _cmd.Blit(_outputRT[_currentRT], destination, _presentationMaterial);
-
-        if (_currentSample < maxSamples)
-            _currentSample += Math.Max(1, samplesPerPass);
-
-        if (_currentSample < maxSamples)
-            _currentRT = 1 - _currentRT;
-
-        Graphics.ExecuteCommandBuffer(_cmd);
-        _cmd.Clear();
-
-        // Unity complains if destination is not set as the current render target,
-        // which doesn't happen using the command buffer.
-        Graphics.SetRenderTarget(destination);
-    }
-
-    void PrepareShader(CommandBuffer _cmd, ComputeShader shader, int kernelIndex)
-    {
-        _bvhScene.PrepareShader(_cmd, shader, kernelIndex);
-        _cmd.SetComputeMatrixParam(shader, "CamInvProj", _cameraProjectionMatrix.inverse);
-        _cmd.SetComputeMatrixParam(shader, "CamToWorld", _cameraToWorldMatrix);
-        // Generate a random seed for each frame
-        _cmd.SetComputeIntParam(shader, "RngSeedRoot", (int)UnityEngine.Random.Range(0, uint.MaxValue));
-        _cmd.SetComputeIntParam(shader, "MaxRayBounces", Math.Max(maxRayBounces, 1));
-        _cmd.SetComputeIntParam(shader, "SamplesPerPass", Math.Max(1, samplesPerPass));
-        _cmd.SetComputeIntParam(shader, "OutputWidth", _outputWidth);
-        _cmd.SetComputeIntParam(shader, "OutputHeight", _outputHeight);
-        _cmd.SetComputeIntParam(shader, "CurrentSample", _currentSample);
-        _cmd.SetComputeIntParam(shader, "EnvironmentMode", (int)environmentMode);
-        _cmd.SetComputeFloatParam(shader, "EnvironmentIntensity", environmentIntensity);
-        _cmd.SetComputeVectorParam(shader, "EnvironmentColor", environmentColor);
-        _cmd.SetComputeFloatParam(shader, "EnvironmentMapRotation", environmentMapRotation);
-        _cmd.SetComputeFloatParam(shader, "FocalLength", focalLength);
-        _cmd.SetComputeFloatParam(shader, "Aperture", aperture);
-        _cmd.SetComputeTextureParam(shader, kernelIndex, "Output", _outputRT[_currentRT]);
-        _cmd.SetComputeTextureParam(shader, kernelIndex, "AccumulatedOutput", _outputRT[1 - _currentRT]);
     }
 }
