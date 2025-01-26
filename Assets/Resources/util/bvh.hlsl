@@ -1,44 +1,11 @@
 #ifndef __UNITY_PATHTRACER_BVH_HLSL__
 #define __UNITY_PATHTRACER_BVH_HLSL__
 
-#include "common.hlsl"
+#include "globals.hlsl"
 #include "intersect.hlsl"
 #include "material.hlsl"
 #include "random.hlsl"
 #include "triangle_attributes.hlsl"
-
-struct BVHInstance
-{
-    float4x4 localToWorld;
-    float4x4 worldToLocal;
-    int materialIndex;
-    int bvhOffset;
-    int triOffset;
-    int triAttributeOffset;
-};
-
-// Nodes in CWBVH format.
-struct BVHNode
-{
-    float4 n0;
-    float4 n1;
-    float4 n2;
-    float4 n3;
-    float4 n4;
-};
-
-struct TLASNode
-{
-    float4 lminLeft;
-    float4 lmaxRight;
-    float4 rminBlasCount;
-    float4 rmaxFirstBlas;
-};
-
-uint TLASInstanceCount;
-StructuredBuffer<BVHNode> BVHNodes;
-StructuredBuffer<float4> BVHTris;
-StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
 // Stack size for BVH traversal
 #define BVH_STACK_SIZE 32

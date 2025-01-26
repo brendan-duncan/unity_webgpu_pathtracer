@@ -9,12 +9,39 @@
 #define INV_4_PI   0.07957747154594766
 #define FAR_PLANE  100000.0f
 
-uint MaxRayBounces;
-uint CurrentSample;
-uint OutputWidth;
-uint OutputHeight;
-RWTexture2D<float4> Output;
-Texture2D<float4> AccumulatedOutput;
+// Nodes in CWBVH format.
+struct BVHNode
+{
+    float4 n0;
+    float4 n1;
+    float4 n2;
+    float4 n3;
+    float4 n4;
+};
+
+#if HAS_TLAS
+struct GPUInstance
+{
+    float4x4 localToWorld;
+    float4x4 worldToLocal;
+    int bvhOffset;
+    int triOffset;
+    int triAttributeOffset;
+    int materialIndex;
+};
+
+struct TLASNode
+{
+    float3 lmin;
+    uint left;
+    float3 lmax;
+    uint right;
+    float3 rmin;
+    uint instanceCount;
+    float3 rmax;
+    uint firstInstance;
+};
+#endif // HAS_TLAS
 
 struct ScatterSampleRec
 {
@@ -47,7 +74,6 @@ struct MaterialData
     float4 textures;
     float4 texture1Transform;
 };
-StructuredBuffer<MaterialData> Materials;
 
 struct TextureDescriptor
 {
@@ -57,10 +83,8 @@ struct TextureDescriptor
     uint padding;
 };
 
-#if HAS_TEXTURES
-StructuredBuffer<TextureDescriptor> TextureDescriptors;
-StructuredBuffer<uint> TextureData;
-#endif
+#define SKY_MODE_ENVIRONMENT 0
+#define SKY_MODE_BASIC 1
 
 #define ALPHA_MODE_OPAQUE 0
 #define ALPHA_MODE_BLEND 1
@@ -110,7 +134,6 @@ struct Material
     //Medium medium;
 };
 
-#if HAS_LIGHTS
 #define LIGHT_TYPE_SPOT 0
 #define LIGHT_TYPE_DIRECTIONAL 1
 #define LIGHT_TYPE_POINT 2
@@ -135,10 +158,6 @@ struct Light
     float3 v; // For spot lights, v is the cosine of the outter and inner angles.
     float padding;
 };
-
-int LightCount;
-StructuredBuffer<Light> Lights;
-#endif // HAS_LIGHTS
 
 struct Ray
 {
@@ -247,6 +266,11 @@ float3 max3(float3 a, float3 b)
 bool isgreater(float4 a, float4 b)
 {
     return all(a > b);
+}
+
+float3 greaterThan(float3 a, float3 b)
+{
+    return float3(a.x > b.x ? 1.0f : 0.0f, a.y > b.y ? 1.0f : 0.0f, a.z > b.z ? 1.0f : 0.0f);
 }
 
 uint4 asuint4(float4 v)

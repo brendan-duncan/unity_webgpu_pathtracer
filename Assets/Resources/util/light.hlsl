@@ -1,7 +1,7 @@
 #ifndef __UNITY_PATHRACER_LIGHT_HLSL__
 #define __UNITY_PATHRACER_LIGHT_HLSL__
 
-#include "common.hlsl"
+#include "globals.hlsl"
 
 #if HAS_LIGHTS
 bool SampleRectLight(in Light light, in float3 scatterPos, inout LightSampleRec lightSample, inout uint rngState)

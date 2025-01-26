@@ -1,24 +1,8 @@
 #ifndef __UNITY_PATHTRACER_SKY_HLSL__
 #define __UNITY_PATHTRACER_SKY_HLSL__
 
-#include "common.hlsl"
+#include "globals.hlsl"
 
-#define SKY_MODE_ENVIRONMENT 0
-#define SKY_MODE_BASIC 1
-
-int EnvironmentMode;
-float3 EnvironmentColor;
-float EnvironmentIntensity;
-
-#if HAS_ENVIRONMENT_TEXTURE
-Texture2D<float4> EnvironmentTexture;
-SamplerState samplerEnvironmentTexture;
-StructuredBuffer<float> EnvironmentCDF;
-int EnvironmentTextureWidth;
-int EnvironmentTextureHeight;
-float EnvironmentCdfSum;
-float EnvironmentMapRotation;
-#endif
 
 float2 BinarySearch(float value)
 {

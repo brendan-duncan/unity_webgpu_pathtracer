@@ -18,6 +18,10 @@ Shader "Hidden/PathTracer/Presentation"
 
         sampler2D _MainTex;
         float Exposure;
+        float Brightness;
+        float Contrast;
+        float Saturation;
+        float Vignette;
         int Mode;
         bool sRGB;
 
@@ -34,13 +38,11 @@ Shader "Hidden/PathTracer/Presentation"
             float3 color = tex2D(_MainTex, i.uv).rgb;
 
             color *= Exposure;
-            //if (Exposure > 0.0f)
-            //    color *= 1.0f / exp2(Exposure); // Exposure Stops
 
             switch (Mode)
             {
                 case 1:
-                    color = ACESFitted(color);
+                    color = ACES(color);
                     break;
                 case 2:
                     color = Filmic(color);
@@ -54,10 +56,18 @@ Shader "Hidden/PathTracer/Presentation"
             }
 
             if (sRGB)
-            {
-                float3 srgb = pow(color, 1.0f / 2.2f);
-                return float4(srgb, 1.0f);
-            }
+                color = LinearToSrgb(color);
+
+            // Contrast and clamp
+            color = saturate(lerp(0.5f, color, Contrast));
+
+            color = pow(color, 1.0 / Brightness);
+
+            float3 l = Luminance(color);
+            color = lerp(l, color, Saturation);
+
+            float2 centerUv = (i.uv - 0.5f) * 2.0f;
+            color *= 1.0f - dot(centerUv, centerUv) * Vignette;
 
             return float4(color, 1.0f);
         }

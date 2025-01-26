@@ -1,8 +1,8 @@
 #ifndef __UNITY_PATHRACER_MATERIAL_HLSL__
 #define __UNITY_PATHRACER_MATERIAL_HLSL__
 
-#include "common.hlsl"
 #include "brdf.hlsl"
+#include "globals.hlsl"
 
 float4 GetTexturePixel(uint textureDataOffset, uint width, uint height, uint x, uint y)
 {

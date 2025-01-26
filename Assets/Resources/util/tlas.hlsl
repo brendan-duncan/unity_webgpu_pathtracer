@@ -1,52 +1,11 @@
 #ifndef __UNITY_PATHTRACER_TLAS_HLSL__
 #define __UNITY_PATHTRACER_TLAS_HLSL__
 
-#include "common.hlsl"
+#include "globals.hlsl"
 #include "intersect.hlsl"
 #include "material.hlsl"
 #include "random.hlsl"
 #include "triangle_attributes.hlsl"
-
-struct GPUInstance
-{
-    float4x4 localToWorld;
-    float4x4 worldToLocal;
-    int bvhOffset;
-    int triOffset;
-    int triAttributeOffset;
-    int materialIndex;
-};
-
-// Nodes in CWBVH format.
-struct BVHNode
-{
-    float4 n0;
-    float4 n1;
-    float4 n2;
-    float4 n3;
-    float4 n4;
-};
-
-struct TLASNode
-{
-    float3 lmin;
-    uint left;
-    float3 lmax;
-    uint right;
-    float3 rmin;
-    uint instanceCount;
-    float3 rmax;
-    uint firstInstance;
-};
-
-uint GPUInstanceCount;
-
-StructuredBuffer<TLASNode> TLASNodes;
-StructuredBuffer<uint> TLASIndices;
-StructuredBuffer<GPUInstance> GPUInstances;
-StructuredBuffer<BVHNode> BVHNodes;
-StructuredBuffer<float4> BVHTris;
-StructuredBuffer<TriangleAttributes> TriangleAttributesBuffer;
 
 #define BVH_STACK_SIZE 32
 

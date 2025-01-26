@@ -35,9 +35,15 @@ public class PathTracer : MonoBehaviour
     public float environmentMapRotation = 0.0f;
     public bool useFireflyFilter = false;
     public float maxFireflyLuminance = 10.0f;
-    public float exposure = 1.0f;
+
+    // Tonemapping settings
     public TonemapMode tonemapMode = TonemapMode.Lottes;
     public bool sRGB = false;
+    public float exposure = 1.0f;
+    public float brightness = 1.0f;
+    public float contrast = 1.0f;
+    public float saturation = 1.0f;
+    public float vignette = 0.0f;
 
     LocalKeyword _hasTexturesKeyword;
     LocalKeyword _hasEnvironmentTextureKeyword;
@@ -245,9 +251,13 @@ public class PathTracer : MonoBehaviour
         _presentationMaterial.SetTexture("_MainTex", _outputRT[_currentRT]);
         _presentationMaterial.SetInt("OutputWidth", _outputWidth);
         _presentationMaterial.SetInt("OutputHeight", _outputHeight);
-        _presentationMaterial.SetFloat("Exposure", exposure);
         _presentationMaterial.SetInt("Mode", (int)tonemapMode);
         _presentationMaterial.SetInt("sRGB", sRGB ? 1 : 0);
+        _presentationMaterial.SetFloat("Exposure", exposure);
+        _presentationMaterial.SetFloat("Brightness", brightness);
+        _presentationMaterial.SetFloat("Contrast", contrast);
+        _presentationMaterial.SetFloat("Saturation", saturation);
+        _presentationMaterial.SetFloat("Vignette", vignette);
         // Overwrite image with output from raytracer, applying tonemapping
         _cmd.Blit(_outputRT[_currentRT], destination, _presentationMaterial);
 
@@ -335,9 +345,24 @@ public class PathTracer : MonoBehaviour
         }
     }
 
+    Light[] FindLights()
+    {
+        Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+        List<Light> validLights = new List<Light>();
+        foreach (Light light in lights)
+        {
+            if (light.enabled && light.intensity > 0.0f && light.gameObject.activeInHierarchy
+                && (light.type == LightType.Point || light.type == LightType.Spot || light.type == LightType.Rectangle))
+            {
+                validLights.Add(light);
+            }
+        }
+        return validLights.ToArray();
+    }
+
     public void UpdateLights()
     {
-        _lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+        _lights = FindLights();
         if (_lights.Length == 0)
         {
             _pathTracerShader.DisableKeyword(_hasLightsKeyword);
