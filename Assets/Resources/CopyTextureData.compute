@@ -6,21 +6,22 @@ RWStructuredBuffer<uint> TextureData;
 uint TextureWidth;
 uint TextureHeight;
 int TextureDataOffset;
+int TextureDescriptorOffset;
 int TextureHasAlpha;
 
 [numthreads(8, 8, 1)]
 void CopyTextureData(uint3 id : SV_DispatchThreadID)
 {
-    //const uint pixelIndex = id.x;
-    //uint pixelX = pixelIndex % TextureWidth;
-    //uint pixelY = pixelIndex / TextureWidth;
     uint pixelX = id.x;
     uint pixelY = id.y;
     uint pixelIndex = pixelY * TextureWidth + pixelX;
 
     if (pixelX < TextureWidth && pixelY < TextureHeight)
     {
-        //pixelY = TextureHeight - pixelY - 1;
+        TextureData[TextureDescriptorOffset + 0] = TextureWidth;
+        TextureData[TextureDescriptorOffset + 1] = TextureHeight;
+        TextureData[TextureDescriptorOffset + 2] = TextureDataOffset;
+        TextureData[TextureDescriptorOffset + 3] = 0;
 
         float4 texel = Texture.Load(int3(pixelX, pixelY, 0));
         uint writeIndex = pixelIndex + TextureDataOffset;

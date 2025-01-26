@@ -75,14 +75,6 @@ struct MaterialData
     float4 texture1Transform;
 };
 
-struct TextureDescriptor
-{
-    uint width;
-    uint height;
-    uint offset;
-    uint padding;
-};
-
 #define SKY_MODE_ENVIRONMENT 0
 #define SKY_MODE_BASIC 1
 

@@ -55,7 +55,6 @@ public class BVHScene
     ComputeBuffer _materialsBuffer;
 
     ComputeShader _textureCopyShader;
-    ComputeBuffer _textureDescriptorBuffer;
     ComputeBuffer _textureDataBuffer;
 
     // BVH data
@@ -122,7 +121,6 @@ public class BVHScene
         _bvhNodesBuffer?.Release();
         _bvhTrianglesBuffer?.Release();
         _materialsBuffer?.Release();
-        _textureDescriptorBuffer?.Release();
         _textureDataBuffer?.Release();
 
         _tlasNodesBuffer?.Release();
@@ -169,7 +167,6 @@ public class BVHScene
 
         if (_textureDataBuffer != null)
         {
-            cmd.SetComputeBufferParam(shader, kernelIndex, "TextureDescriptors", _textureDescriptorBuffer);
             cmd.SetComputeBufferParam(shader, kernelIndex, "TextureData", _textureDataBuffer);
         }
     }
@@ -376,15 +373,12 @@ public class BVHScene
 
             if (totalTextureSize > 0)
             {
-                _textureDataBuffer = new ComputeBuffer(totalTextureSize, 4);
-
-                _textureDescriptorBuffer = new ComputeBuffer(textures.Count, 16);
+                _textureDataBuffer = new ComputeBuffer(totalTextureSize + (textures.Count * 4), 4);
 
                 _textureCopyShader.SetBuffer(0, "TextureData", _textureDataBuffer);
 
-                uint[] textureDescriptorData = new uint[textures.Count * 4];
-                int ti = 0;
-                int textureDataOffset = 0;
+                int textureDescriptorOffset = 0;
+                int textureDataOffset = textures.Count * 4; // Texture data starts after the descriptor data
                 int textureIndex = 0;
                 foreach (Texture texture in textures)
                 {
@@ -396,15 +390,11 @@ public class BVHScene
                     Debug.Log($"Texture {textureIndex}: {texture.name} {width}x{height} offset:{textureDataOffset} {(totalPixels * 4):n0} bytes");
                     textureIndex++;
 
-                    textureDescriptorData[ti++] = (uint)width;
-                    textureDescriptorData[ti++] = (uint)height;
-                    textureDescriptorData[ti++] = (uint)textureDataOffset;
-                    textureDescriptorData[ti++] = (uint)0;
-
                     _textureCopyShader.SetTexture(0, "Texture", texture);
                     _textureCopyShader.SetInt("TextureWidth", width);
                     _textureCopyShader.SetInt("TextureHeight", height);
                     _textureCopyShader.SetInt("TextureDataOffset", textureDataOffset);
+                    _textureCopyShader.SetInt("TextureDescriptorOffset", textureDescriptorOffset);
                     _textureCopyShader.SetInt("TextureHasAlpha", hasAlpha ? 1 : 0);
 
                     //int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
@@ -413,18 +403,15 @@ public class BVHScene
                     _textureCopyShader.Dispatch(0, dispatchX, dispatchY, 1);
 
                     textureDataOffset += totalPixels;
+                    textureDescriptorOffset += 4;
                 }
-
-                _textureDescriptorBuffer.SetData(textureDescriptorData);
 
                 Debug.Log($"Total texture data size: {(totalTextureSize * 16):n0} bytes");
             }
             else
             {
                 _textureDataBuffer?.Release();
-                _textureDescriptorBuffer?.Release();
                 _textureDataBuffer = null;
-                _textureDescriptorBuffer = null;
             }
         }
     }

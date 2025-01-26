@@ -34,7 +34,6 @@ StructuredBuffer<float> EnvironmentCDF;
 #endif
 
 #if HAS_TEXTURES
-StructuredBuffer<TextureDescriptor> TextureDescriptors;
 StructuredBuffer<uint> TextureData;
 #endif
 
