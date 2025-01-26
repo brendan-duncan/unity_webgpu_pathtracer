@@ -19,9 +19,27 @@
 uint RngSeedRoot;
 int SamplesPerPass;
 
+// Standard deviation of the Gaussian filter used for antialiasing,
+// in units of pixels.
+// This value of 1 / sqrt(8 ln(2)) makes it so that a Gaussian centered
+// on a pixel is at exactly 1/2 its maximum at the midpoints between
+// orthogonally adjacent pixels, and 1/4 its maximum at the "corners"
+// of pixels. It also empirically looks nice: larger values are
+// too blurry, and smaller values make thin lines look jagged.
+#define ANTIALIASING_STANDARD_DEVIATION 0.4246609f
+
+float2 SampleGaussian(float u, float v)
+{
+    const float r = sqrt(-2.0f * log(max(1e-38f, u))); // Radius
+    const float theta = 2.0f * PI * v; // Angle
+    return r * float2(cos(theta), sin(theta));
+}
+
+bool UseFireflyFilter;
+float MaxFireflyLuminance;
+
 //[numthreads(128, 1, 1)]
-//[numthreads(8, 8, 1)]
-[numthreads(32, 32, 1)]
+[numthreads(8, 8, 1)]
 void PathTracer(uint3 gid : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID)
 {
     //const uint pixelIndex = gid.x;
@@ -39,21 +57,42 @@ void PathTracer(uint3 gid : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID)
         const float fSamples = (float)numSamples;
         uint rngState = pixelIndex * (CurrentSample + 1) + RngSeedRoot;
 
+        int currentSample = CurrentSample;
+
         float3 color = 0.0f;
         int sampleIndex = 0;
-        for (; sampleIndex < numSamples; ++sampleIndex)
+        for (; sampleIndex < numSamples; ++sampleIndex, ++currentSample)
         {
-            float2 randomSample = float2(RandomFloat(rngState), RandomFloat(rngState));
+            float2 subpixelOffset = float2(0.5f, 0.5f);
+            //if (currentSample > 1)
+                //subpixelOffset = float2(RandomFloat(rngState), RandomFloat(rngState));
+                subpixelOffset += ANTIALIASING_STANDARD_DEVIATION  * SampleGaussian(RandomFloat(rngState), RandomFloat(rngState));
 
-            float2 pixelCoordsSample = pixelCoords + randomSample;
+            float2 pixelCoordsSample = pixelCoords + subpixelOffset;
 
             Ray ray = GetScreenRay(pixelCoordsSample, rngState);
 
-            color += PathTrace(ray, rngState);
+            float3 radiance = PathTrace(ray, rngState);
+
+            if (UseFireflyFilter)
+            {
+                float lum = Luminance(radiance);
+                if (lum > MaxFireflyLuminance)
+                    radiance *= MaxFireflyLuminance / lum;
+            }
+
+            color += radiance;
         }
 
-        float4 currentColor = AccumulatedOutput[pixelCoords];
-        float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + fSamples);
-        Output[pixelCoords] = float4(accumilatedColor, 1.0f);
+        if (CurrentSample > 0)
+        {
+            float4 currentColor = AccumulatedOutput[pixelCoords];
+            float3 accumilatedColor = (color + currentColor.rgb * CurrentSample) / (CurrentSample + fSamples);
+            Output[pixelCoords] = float4(accumilatedColor, 1.0f);
+        }
+        else
+        {
+            Output[pixelCoords] = float4(color / fSamples, 1.0f);
+        }
     }
 }

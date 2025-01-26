@@ -188,6 +188,7 @@ public class BVHScene
                 material.HasProperty("_Color") ? material.color
                 : material.HasProperty("baseColorFactor") ? material.GetColor("baseColorFactor")
                 : new Color(0.8f, 0.8f, 0.8f, 1.0f);
+            float transmission = material.HasProperty("transmissionFactor") ? material.GetFloat("transmissionFactor") : 0.0f;
             Color emission = 
                 material.HasProperty("_EmissionColor") ? material.GetColor("_EmissionColor")
                 : material.HasProperty("emissiveFactor") ? material.GetColor("emissiveFactor")
@@ -244,10 +245,14 @@ public class BVHScene
             int mdi = i * kMaterialSize;
             int mti = mdi + kTextureOffset;
 
+            float opacity = baseColor.a * (1.0f - transmission);
+
+            Debug.Log($"!!!! MATERIAL {material.name} transmission:{transmission} opacity:{opacity} ior:{ior}");
+
             materialData[mdi + 0] = Mathf.Pow(baseColor.r, 2.2f); // data1
             materialData[mdi + 1] = Mathf.Pow(baseColor.g, 2.2f);
             materialData[mdi + 2] = Mathf.Pow(baseColor.b, 2.2f);
-            materialData[mdi + 3] = baseColor.a;
+            materialData[mdi + 3] = opacity;
 
             materialData[mdi + 4] = emission.r; // data2
             materialData[mdi + 5] = emission.g;
@@ -270,7 +275,7 @@ public class BVHScene
             materialData[mdi + 19] = clearCoat;
 
             materialData[mdi + 20] = clearCoatGloss; // data6
-            materialData[mdi + 21] = 1.0f - baseColor.a;
+            materialData[mdi + 21] = 1.0f - opacity;
             materialData[mdi + 22] = 0.0f;
             materialData[mdi + 23] = 0.0f;
 
@@ -403,8 +408,10 @@ public class BVHScene
                     _textureCopyShader.SetInt("TextureDataOffset", textureDataOffset);
                     _textureCopyShader.SetInt("TextureHasAlpha", hasAlpha ? 1 : 0);
 
-                    int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
-                    _textureCopyShader.Dispatch(0, dispatchX, 1, 1);
+                    //int dispatchX = Mathf.CeilToInt(totalPixels / 128.0f);
+                    int dispatchX = Mathf.CeilToInt(width / 8.0f);
+                    int dispatchY = Mathf.CeilToInt(height / 8.0f);
+                    _textureCopyShader.Dispatch(0, dispatchX, dispatchY, 1);
 
                     textureDataOffset += totalPixels;
                 }
@@ -551,8 +558,8 @@ public class BVHScene
             int dispatchX = Mathf.CeilToInt(triangleCount / 64.0f);
             _meshProcessingShader.Dispatch(0, dispatchX, 1, 1);
 
-            vertexBuffer?.Release();
-            indexBuffer?.Release();
+            vertexBuffer?.Dispose();
+            indexBuffer?.Dispose();
 
             triangleOffset += triangleCount;
             vertexOffset += triangleCount * 3;
@@ -701,7 +708,7 @@ public class BVHScene
                 _gpuInstances[instanceIndex].localToWorld = localToWorld;
                 _gpuInstances[instanceIndex].worldToLocal = worldToLocal;
 
-                Debug.Log($"INSTANCE {instanceIndex} Mesh: {meshIndex} BVH: {bvhIndex} Material: {materialIndex} Bounds: {bounds.min}x{bounds.max} TriOffset: {_gpuInstances[instanceIndex].triOffset} TriAttrOffset: {_gpuInstances[instanceIndex].triAttributeOffset}");
+                //Debug.Log($"INSTANCE {instanceIndex} Mesh: {meshIndex} BVH: {bvhIndex} Material: {materialIndex} Bounds: {bounds.min}x{bounds.max} TriOffset: {_gpuInstances[instanceIndex].triOffset} TriAttrOffset: {_gpuInstances[instanceIndex].triAttributeOffset}");
 
                 totalInstancedTriangles += _meshTriangleCount[meshIndex];
             }
@@ -720,9 +727,9 @@ public class BVHScene
             for (int i = 0; i < _blasInstances.Length; ++i)
             {
                 BLASInstance instance = _blasInstances[i];
-                Debug.Log($"BLAS Instance {i} blas:{instance.blasIndex}\n{instance.localToWorld}\n{instance.aabbMin} x {instance.aabbMax}");
+                //Debug.Log($"BLAS Instance {i} blas:{instance.blasIndex}\n{instance.localToWorld}\n{instance.aabbMin} x {instance.aabbMax}");
             }
-            Debug.Log("-------");
+            //Debug.Log("-------");
 
             NativeArray<BLASInstance> blasInstancesPtr = new(_blasInstances, Allocator.Persistent);
             IntPtr blasInstancesCPtr = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(blasInstancesPtr);

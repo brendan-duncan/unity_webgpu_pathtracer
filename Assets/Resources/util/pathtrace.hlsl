@@ -59,8 +59,7 @@ float3 PathTrace(Ray ray, inout uint rngState)
         Material material = hit.material;
 
         // Debug a material or intersection property
-        //radiance = material.emission;
-        //radiance = hit.normal;
+        //radiance = material.specTrans;
         //break;
 
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled

@@ -8,27 +8,29 @@ uint TextureHeight;
 int TextureDataOffset;
 int TextureHasAlpha;
 
-[numthreads(128, 1, 1)]
+[numthreads(8, 8, 1)]
 void CopyTextureData(uint3 id : SV_DispatchThreadID)
 {
-    const uint pixelIndex = id.x;
-    uint pixelX = pixelIndex % TextureWidth;
-    uint pixelY = pixelIndex / TextureWidth;
-    if (pixelX >= TextureWidth || pixelY >= TextureHeight)
+    //const uint pixelIndex = id.x;
+    //uint pixelX = pixelIndex % TextureWidth;
+    //uint pixelY = pixelIndex / TextureWidth;
+    uint pixelX = id.x;
+    uint pixelY = id.y;
+    uint pixelIndex = pixelY * TextureWidth + pixelX;
+
+    if (pixelX < TextureWidth && pixelY < TextureHeight)
     {
-        return;
+        //pixelY = TextureHeight - pixelY - 1;
+
+        float4 texel = Texture.Load(int3(pixelX, pixelY, 0));
+        uint writeIndex = pixelIndex + TextureDataOffset;
+
+        uint r = (uint)(texel.r * 255.0f) & 0xff;
+        uint g = (uint)(texel.g * 255.0f) & 0xff;
+        uint b = (uint)(texel.b * 255.0f) & 0xff;
+        uint a = TextureHasAlpha ? (uint)(texel.a * 255.0f) & 0xff : 0xff;
+        uint texelData = (a << 24) | (b << 16) | (g << 8) | r;
+
+        TextureData[writeIndex] = texelData;
     }
-
-    //pixelY = TextureHeight - pixelY - 1;
-
-    float4 texel = Texture.Load(int3(pixelX, pixelY, 0));
-    uint writeIndex = pixelIndex + TextureDataOffset;
-
-    uint r = (uint)(texel.r * 255.0f) & 0xff;
-    uint g = (uint)(texel.g * 255.0f) & 0xff;
-    uint b = (uint)(texel.b * 255.0f) & 0xff;
-    uint a = TextureHasAlpha ? (uint)(texel.a * 255.0f) & 0xff : 0xff;
-    uint texelData = (a << 24) | (b << 16) | (g << 8) | r;
-
-    TextureData[writeIndex] = texelData;
 }

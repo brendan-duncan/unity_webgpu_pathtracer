@@ -9,9 +9,11 @@ Shader "PathTracer/PathTracer"
         normalScale ("Normal Scale", Range(0.0, 3.0)) = 1.0
 
         //_Opacity ("Opacity", Range(0.0, 1.0)) = 1.0
-        //[Enum(Opaque,0, Blend,1, Mask,2)] _AlphaMode ("Alpha Mode", Range(0, 2)) = 0
-        //alphaCutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
-        
+        [Enum(Opaque,0, Blend,1, Mask,2)] _AlphaMode ("Alpha Mode", Range(0, 2)) = 0
+        alphaCutoff ("Alpha Cutoff", Range(0.0, 1.0)) = 0.5
+
+        transmissionFactor ("Transmission", Range(0.0, 1.0)) = 0.0
+
         [HDR] emissiveFactor ("Emission", Color) = (0, 0, 0, 0)
         emissiveTexture ("Emission", 2D) = "white" {}
 
@@ -43,7 +45,7 @@ Shader "PathTracer/PathTracer"
         }
 
         CGINCLUDE
-        
+
         #include "UnityPBSLighting.cginc"
         #include "AutoLight.cginc"
 
@@ -57,6 +59,7 @@ Shader "PathTracer/PathTracer"
         float4 baseColorFactor;
         float normalScale;
         float4 emissiveFactor;
+        float transmissionFactor;
         float anisotropicFactor;
         float metallicFactor;
         float roughnessFactor;
@@ -204,7 +207,7 @@ Shader "PathTracer/PathTracer"
             float Dr = GTR1(ndoth, lerp(0.1f, 0.001f, clearCoatGloss)); // Normalized Isotropic GTR Gamma == 1
             float Fr = lerp(0.04, 1.0f, FH);
             float Gr = SmithGGX(ndotl, ndotv, 0.25f);
-            
+
             output.diffuse = (1.0f / PI) * (lerp(Fd, ss, subsurfaceFactor) * surfaceColor + Fsheen) * (1 - metallicFactor);
             output.specular = Ds * F * G;
             output.clearcoat = 0.25f * clearCoatFactor * Gr * Fr * Dr;
@@ -272,7 +275,7 @@ Shader "PathTracer/PathTracer"
                 //T.z = sqrt(1 - saturate(dot(T.xy, T.xy)));
                 //T = mul(lerp(float3(1.0f, 0.0f, 0.0f), T, saturate(normalScale)), worldToTangent);
                 float3 T = i.tangent.xyz;
-                
+
                 float3 albedo = tex2D(baseColorTexture, uv).rgb;
 
                 float3 L = normalize(_WorldSpaceLightPos0.xyz); // Direction *towards* light source

@@ -33,6 +33,8 @@ public class PathTracer : MonoBehaviour
     public float environmentIntensity = 1.0f;
     public Texture2D environmentTexture;
     public float environmentMapRotation = 0.0f;
+    public bool useFireflyFilter = false;
+    public float maxFireflyLuminance = 10.0f;
     public float exposure = 1.0f;
     public TonemapMode tonemapMode = TonemapMode.Lottes;
     public bool sRGB = false;
@@ -78,6 +80,8 @@ public class PathTracer : MonoBehaviour
     Matrix4x4 _cameraToWorldMatrix;
     Matrix4x4 _cameraProjectionMatrix;
 
+    bool _initialize = true;
+
     void Start()
     {
         _camera = GetComponent<Camera>();
@@ -90,8 +94,6 @@ public class PathTracer : MonoBehaviour
 
         _bvhScene = new BVHScene();
         _cmd = new CommandBuffer();
-
-        _bvhScene.Start(useTLAS);
 
         _pathTracerShader = Resources.Load<ComputeShader>("PathTracer");
         _presentationMaterial = new Material(Resources.Load<Shader>("Presentation"));
@@ -119,7 +121,7 @@ public class PathTracer : MonoBehaviour
             Graphics.Blit(environmentTexture, _envTextureCopy);
 
             _pathTracerShader.SetTexture(0, "EnvironmentTexture", _envTextureCopy);
-            
+
             _envTextureCPU = new NativeArray<Color>(environmentTexture.width * environmentTexture.height, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             const int mipLevel = 0;
             const TextureFormat format = TextureFormat.RGBAFloat;
@@ -130,8 +132,6 @@ public class PathTracer : MonoBehaviour
             _environmentTextureReady = true;
             _pathTracerShader.DisableKeyword(_hasEnvironmentTextureKeyword);
         }
-
-        UpdateLights();
     }
 
     void OnDestroy()
@@ -149,6 +149,13 @@ public class PathTracer : MonoBehaviour
 
     void Update()
     {
+        if (_initialize)
+        {
+            _bvhScene.Start(useTLAS);
+            UpdateLights();
+            _initialize = false;
+        }
+
         if (_bvhScene.UpdateTLAS())
             Reset();
 
@@ -228,6 +235,8 @@ public class PathTracer : MonoBehaviour
             _cmd.SetComputeFloatParam(_pathTracerShader, "Aperture", aperture);
             _cmd.SetComputeTextureParam(_pathTracerShader, 0, "Output", _outputRT[_currentRT]);
             _cmd.SetComputeTextureParam(_pathTracerShader, 0, "AccumulatedOutput", _outputRT[1 - _currentRT]);
+            _cmd.SetComputeIntParam(_pathTracerShader, "UseFireflyFilter", useFireflyFilter ? 1 : 0);
+            _cmd.SetComputeFloatParam(_pathTracerShader, "MaxFireflyLuminance", maxFireflyLuminance);
 
             _cmd.DispatchCompute(_pathTracerShader, 0, dispatchX, dispatchY, 1);
             _cmd.EndSample("Path Tracer");
