@@ -15,7 +15,7 @@ public class DisneyBRDFTest : MonoBehaviour
     public Slider clearCoatGlossSlider;
     public Slider metallicSlider;
     public Slider roughnessSlider;
-    public Slider opacitySlider;
+    public Slider transmissionSlider;
     public Slider iorSlider;
     public MeshRenderer mesh;
 
@@ -64,11 +64,10 @@ public class DisneyBRDFTest : MonoBehaviour
                 material.GetFloat("metallicFactor") != metallicSlider.value ||
                 material.GetFloat("roughnessFactor") != roughnessSlider.value ||
                 material.GetFloat("ior") != iorSlider.value ||
-                baseColor.a != opacitySlider.value)
+                material.GetFloat("transmissionFactor") != transmissionSlider.value)
             {
                 changed = true;
             }
-            baseColor.a = opacitySlider.value;
             material.SetColor("baseColorFactor", baseColor);
             material.SetFloat("anisotropicFactor", anisotropicSlider.value);
             material.SetFloat("sheenFactor", sheenSlider.value);
@@ -80,6 +79,7 @@ public class DisneyBRDFTest : MonoBehaviour
             material.SetFloat("clearCoatGloss", clearCoatGlossSlider.value);
             material.SetFloat("metallicFactor", metallicSlider.value);
             material.SetFloat("roughnessFactor", roughnessSlider.value);
+            material.SetFloat("transmissionFactor", transmissionSlider.value);
             material.SetFloat("ior", iorSlider.value);
         }
 

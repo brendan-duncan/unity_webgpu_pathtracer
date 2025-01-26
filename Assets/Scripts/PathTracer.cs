@@ -33,7 +33,7 @@ public class PathTracer : MonoBehaviour
     public float environmentIntensity = 1.0f;
     public Texture2D environmentTexture;
     public float environmentMapRotation = 0.0f;
-    public bool useFireflyFilter = false;
+    public bool fireflyFilter = false;
     public float maxFireflyLuminance = 10.0f;
 
     // Tonemapping settings
@@ -241,7 +241,7 @@ public class PathTracer : MonoBehaviour
             _cmd.SetComputeFloatParam(_pathTracerShader, "Aperture", aperture);
             _cmd.SetComputeTextureParam(_pathTracerShader, 0, "Output", _outputRT[_currentRT]);
             _cmd.SetComputeTextureParam(_pathTracerShader, 0, "AccumulatedOutput", _outputRT[1 - _currentRT]);
-            _cmd.SetComputeIntParam(_pathTracerShader, "UseFireflyFilter", useFireflyFilter ? 1 : 0);
+            _cmd.SetComputeIntParam(_pathTracerShader, "UseFireflyFilter", fireflyFilter ? 1 : 0);
             _cmd.SetComputeFloatParam(_pathTracerShader, "MaxFireflyLuminance", maxFireflyLuminance);
 
             _cmd.DispatchCompute(_pathTracerShader, 0, dispatchX, dispatchY, 1);
