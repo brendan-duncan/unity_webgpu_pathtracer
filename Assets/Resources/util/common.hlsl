@@ -121,8 +121,9 @@ struct Material
 
     float ax;
     float ay;
-    float padding1;
-    float padding2;
+    float eta;
+    float padding;
+
     //Medium medium;
 };
 
@@ -175,15 +176,13 @@ struct RayHit
     uint steps;
 
     float3 tangent;
-    float eta;
+    int materialIndex;
 
     float3 ffnormal;
     uint intersectType;
 
     float2 uv;
     float2 padding2;
-
-    Material material;
 };
 
 float Luminance(float3 color)

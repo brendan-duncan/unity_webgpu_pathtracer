@@ -123,7 +123,7 @@ float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, i
     if (L.z > 0.0)
         H = normalize(L + V);
     else
-        H = normalize(L + V * hit.eta);
+        H = normalize(L + V * mat.eta);
 
     if (H.z < 0.0)
         H = -H;
@@ -131,7 +131,7 @@ float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, i
     // Tint colors
     float3 Csheen, Cspec0;
     float F0;
-    TintColors(mat, hit.eta, F0, Csheen, Cspec0);
+    TintColors(mat, mat.eta, F0, Csheen, Cspec0);
 
     // Model weights
     float dielectricWt = (1.0 - mat.metallic) * (1.0 - mat.specTrans);
@@ -198,7 +198,7 @@ float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, i
     if (glassPr > 0.0)
     {
         // Dielectric fresnel (achromatic)
-        float F = DielectricFresnel(VDotH, hit.eta);
+        float F = DielectricFresnel(VDotH, mat.eta);
 
         if (reflect)
         {
@@ -207,7 +207,7 @@ float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, i
         }
         else
         {
-            f += EvalMicrofacetRefraction(mat, hit.eta, V, L, H, float3(F, F, F), tmpPdf) * glassWt;
+            f += EvalMicrofacetRefraction(mat, mat.eta, V, L, H, float3(F, F, F), tmpPdf) * glassWt;
             pdf += tmpPdf * glassPr * (1.0 - F);
         }
     }
@@ -252,7 +252,7 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
     // Tint colors
     float3 Csheen, Cspec0;
     float F0;
-    TintColors(mat, hit.eta, F0, Csheen, Cspec0);
+    TintColors(mat, mat.eta, F0, Csheen, Cspec0);
 
     // Model weights
     float dielectricWt = (1.0 - mat.metallic) * (1.0 - mat.specTrans);
@@ -304,7 +304,7 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
     else if (r3 < cdf3) // Glass
     {
         float3 H = SampleGGXVNDF(V, mat.ax, mat.ay, r1, r2);
-        float F = DielectricFresnel(abs(dot(V, H)), hit.eta);
+        float F = DielectricFresnel(abs(dot(V, H)), mat.eta);
 
         if (H.z < 0.0)
             H = -H;
@@ -316,7 +316,7 @@ float3 SampleBRDF(RayHit hit, Material mat, float3 V, float3 N, out float3 L, ou
         if (r3 < F)
             L = normalize(reflect(-V, H));
         else // Transmission
-            L = normalize(refract(-V, H, hit.eta));
+            L = normalize(refract(-V, H, mat.eta));
 
         //return float3(0.0f, 0.0f, 1.0f);
     }

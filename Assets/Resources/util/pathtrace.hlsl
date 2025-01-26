@@ -19,6 +19,8 @@ float3 PathTrace(Ray ray, inout uint rngState)
 
     RayHit hit = (RayHit)0;
 
+    float maxRoughness = 0.0f;
+
     uint rayDepth = 0;
     for (; ; ++rayDepth)
     {
@@ -56,7 +58,13 @@ float3 PathTrace(Ray ray, inout uint rngState)
             break;
         }*/
 
-        Material material = hit.material;
+        //Material material = hit.material;
+        Material material = GetMaterial(Materials[hit.materialIndex], ray, hit);
+
+        // Keep track of the maximum roughness to prevent firefly artifacts
+        // by forcing subsequent bounces to be at least as rough
+        maxRoughness = max(maxRoughness, material.roughness);
+        material.roughness = maxRoughness;
 
         // Debug a material or intersection property
         //radiance = material.specTrans;

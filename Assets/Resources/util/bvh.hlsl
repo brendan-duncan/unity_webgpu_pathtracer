@@ -207,8 +207,7 @@ bool RayIntersectBvh(const Ray ray, inout RayHit hit, bool isShadowRay)
         hit.normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
         hit.ffnormal = dot(hit.normal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
         hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
-        hit.material = GetMaterial(Materials[triAttr.materialIndex], ray, hit);
-        hit.eta = (dot(ray.direction, hit.normal) < 0.0) ? 1.0f / hit.material.ior : hit.material.ior;
+        hit.materialIndex = triAttr.materialIndex;
         hit.intersectType = INTERSECT_TRIANGLE;
     }
 

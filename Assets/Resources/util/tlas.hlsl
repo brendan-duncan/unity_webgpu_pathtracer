@@ -225,10 +225,9 @@ bool RayIntersectBvh(const Ray worldRay, in BLASInstance instance, bool isShadow
         float3 tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
         hit.tangent = normalize(mul(instance.localToWorld, float4(tangent, 0.0f)).xyz);
 
-        hit.material = GetMaterial(Materials[instance.materialIndex], worldRay, hit);
-
         hit.ffnormal = dot(hit.normal, worldRay.direction) <= 0.0 ? hit.normal : -hit.normal;
-        hit.eta = (dot(worldRay.direction, hit.normal) < 0.0) ? 1.0f / hit.material.ior : hit.material.ior;
+
+        hit.materialIndex = instance.materialIndex;
     }
 
     return hit.distance < FAR_PLANE;

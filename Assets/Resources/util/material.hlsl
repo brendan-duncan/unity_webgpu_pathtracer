@@ -104,6 +104,8 @@ Material GetMaterial(in MaterialData materialData, in Ray ray, inout RayHit hit)
         hit.ffnormal = dot(origNormal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
     }*/
 
+    material.eta = (dot(ray.direction, hit.normal) < 0.0) ? 1.0f / material.ior : material.ior;
+
     return material;
 }
 
