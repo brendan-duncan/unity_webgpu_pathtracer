@@ -19,7 +19,7 @@ float3 InterpolateAttribute(float2 barycentric, float3 attr0, float3 attr1, floa
     return attr0 * (1.0f - barycentric.x - barycentric.y) + attr1 * barycentric.x + attr2 * barycentric.y;
 }
 
-bool IntersectTriangle(const GPUInstance instance, int triAddr, const Ray ray, inout RayHit hit)
+bool IntersectTriangle(const BLASInstance instance, int triAddr, const Ray ray, inout RayHit hit)
 {
     bool hitFound = false;
     float3 v0 = BVHTris[triAddr + 2].xyz;
@@ -126,7 +126,7 @@ uint IntersectCWBVHNode(float3 origin, float3 invDir, uint octinv4, float tmax, 
     return hitmask;
 }
 
-bool RayIntersectBvh(const Ray worldRay, in GPUInstance instance, bool isShadowRay, inout RayHit hit)
+bool RayIntersectBvh(const Ray worldRay, in BLASInstance instance, bool isShadowRay, inout RayHit hit)
 {
     const float4x4 worldToLocal = instance.worldToLocal;
     const float3 localOrigin = mul(worldToLocal, float4(worldRay.origin, 1.0f)).xyz;
@@ -315,7 +315,7 @@ bool RayIntersectTLAS(const Ray ray, inout RayHit hit, bool isShadowRay)
             for (uint i = 0; i < instanceCount; ++i)
             {
                 const uint instanceIndex = TLASIndices[firstInstance + i];
-                const GPUInstance instance = GPUInstances[instanceIndex];
+                const BLASInstance instance = BLASInstances[instanceIndex];
                 hitFound = RayIntersectBvh(ray, instance, isShadowRay, hit) | hitFound;
 
                 /*const float4x4 worldToLocal = instance.worldToLocal;

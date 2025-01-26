@@ -44,10 +44,9 @@ StructuredBuffer<Light> Lights;
 #endif
 
 #if HAS_TLAS
-uint GPUInstanceCount;
 StructuredBuffer<TLASNode> TLASNodes;
 StructuredBuffer<uint> TLASIndices;
-StructuredBuffer<GPUInstance> GPUInstances;
+StructuredBuffer<BLASInstance> BLASInstances;
 
 StructuredBuffer<BVHNode> BVHNodes;
 StructuredBuffer<float4> BVHTris;

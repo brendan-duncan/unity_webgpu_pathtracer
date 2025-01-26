@@ -20,7 +20,7 @@ struct BVHNode
 };
 
 #if HAS_TLAS
-struct GPUInstance
+struct BLASInstance
 {
     float4x4 localToWorld;
     float4x4 worldToLocal;
@@ -372,7 +372,7 @@ float3x3 GetONB(float3 z)
         float a =  z.y * k;
         float b =  z.y * a;
         float c = -z.x * a;
-        
+
         float3 x = normalize(float3(z.z + b, c, -z.x));
         float3 y = normalize(float3(c, 1.0f - b, -z.y));
 #else

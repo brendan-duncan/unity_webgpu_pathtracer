@@ -164,8 +164,7 @@ public class BVHScene
         {
             cmd.SetComputeBufferParam(shader, kernelIndex, "TLASNodes", _tlasNodesBuffer);
             cmd.SetComputeBufferParam(shader, kernelIndex, "TLASIndices", _tlasIndicesBuffer);
-            cmd.SetComputeBufferParam(shader, kernelIndex, "GPUInstances", _gpuInstancesBuffer);
-            cmd.SetComputeIntParam(shader, "GPUInstanceCount", _gpuInstanceCount);
+            cmd.SetComputeBufferParam(shader, kernelIndex, "BLASInstances", _gpuInstancesBuffer);
         }
 
         if (_textureDataBuffer != null)
