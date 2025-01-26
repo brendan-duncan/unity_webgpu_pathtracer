@@ -10,6 +10,7 @@ uint OutputWidth;
 uint OutputHeight;
 uint RngSeedRoot;
 int SamplesPerPass;
+int UseRussianRoulette;
 
 int EnvironmentMode;
 float3 EnvironmentColor;

@@ -25,16 +25,20 @@ public class PathTracer : MonoBehaviour
     public int samplesPerPass = 1;
     public int maxSamples = 100000;
     public int maxRayBounces = 5;
+    public bool useRussianRoulette = true;
+    public bool fireflyFilter = false;
+    public float maxFireflyLuminance = 10.0f;
+
+    // Camera settings
     public float focalLength = 10.0f;
     public float aperture = 0.0f;
-    public float skyTurbidity = 1.0f;
+
+    // Environment settings
     public EnvironmentMode environmentMode = EnvironmentMode.Environment;
     public Color environmentColor = Color.white;
     public float environmentIntensity = 1.0f;
     public Texture2D environmentTexture;
     public float environmentMapRotation = 0.0f;
-    public bool fireflyFilter = false;
-    public float maxFireflyLuminance = 10.0f;
 
     // Tonemapping settings
     public TonemapMode tonemapMode = TonemapMode.Lottes;
@@ -243,6 +247,7 @@ public class PathTracer : MonoBehaviour
             _cmd.SetComputeTextureParam(_pathTracerShader, 0, "AccumulatedOutput", _outputRT[1 - _currentRT]);
             _cmd.SetComputeIntParam(_pathTracerShader, "UseFireflyFilter", fireflyFilter ? 1 : 0);
             _cmd.SetComputeFloatParam(_pathTracerShader, "MaxFireflyLuminance", maxFireflyLuminance);
+            _cmd.SetComputeIntParam(_pathTracerShader, "UseRussianRoulette", useRussianRoulette ? 1 : 0);
 
             _cmd.DispatchCompute(_pathTracerShader, 0, dispatchX, dispatchY, 1);
             _cmd.EndSample("Path Tracer");

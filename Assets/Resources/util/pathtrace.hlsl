@@ -112,6 +112,15 @@ float3 PathTrace(Ray ray, inout uint rngState)
         // Move ray origin to hit point and set direction for next bounce
         ray.direction = scatterSample.L;
         ray.origin = hit.position + ray.direction * EPSILON;
+
+        // Russian roulette termination
+        if (UseRussianRoulette)
+        {
+            float rrPcont = min(max(throughput.x, max(throughput.y, throughput.z)) + 0.001f, 0.95f);
+            if (RandomFloat(rngState) >= rrPcont)
+                break;
+            throughput /= rrPcont;
+        }
     }
 
     return radiance;
