@@ -243,10 +243,8 @@ bool RayIntersectTLAS(Ray ray, inout RayHit hit, bool isShadowRay)
     uint stack[BVH_STACK_SIZE];
     uint nodeIndex = 0;
     uint stackPtr = 0;
-    uint count = 0;
 
-    while (count++ < 1000)
-    //while (true)
+    while (true)
     {
         uint nodeOffset = nodeIndex * TLASNodeSize;
 
