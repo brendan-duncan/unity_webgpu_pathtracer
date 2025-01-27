@@ -30,6 +30,8 @@ struct BLASInstance
     int materialIndex;
 };
 
+// This node struct is stored in the TLASData buffer, left here for reference
+// of how the floats in that struct are laid out.
 /*struct TLASNode
 {
     float3 lmin;
