@@ -38,20 +38,20 @@ float4 SampleTexture(int textureIndex, float2 uv, bool linearSample)
 
         float u = uv.x;
         float v = uv.y;
-        while (u > 1.0f)
+        if (u > 1.0f)
             u -= 1.0f;
-        while (v > 1.0f)
+        if (v > 1.0f)
             v -= 1.0f;
-        while (u < 0.0f)
+        if (u < 0.0f)
             u += 1.0f;
-        while (v < 0.0f)
+        if (v < 0.0f)
             v += 1.0f;
 
         float tu = u * (width - 1.0f);
         float tv = v * (height - 1.0f);
 
-        uint tx = (uint)(tu);
-        uint ty = (uint)(tv);
+        uint tx = (uint)tu;
+        uint ty = (uint)tv;
 
         float4 p1 = GetTexturePixel(offset, width, height, tx, ty);
 

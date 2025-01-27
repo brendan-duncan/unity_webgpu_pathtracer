@@ -30,17 +30,21 @@ struct BLASInstance
     int materialIndex;
 };
 
-struct TLASNode
+/*struct TLASNode
 {
     float3 lmin;
     uint left;
+
     float3 lmax;
     uint right;
+
     float3 rmin;
     uint instanceCount;
+
     float3 rmax;
     uint firstInstance;
-};
+};*/
+#define TLASNodeSize 16
 #endif // HAS_TLAS
 
 struct ScatterSampleRec

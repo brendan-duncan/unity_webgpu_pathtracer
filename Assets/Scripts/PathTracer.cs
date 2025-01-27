@@ -182,7 +182,6 @@ public class PathTracer : MonoBehaviour
         //_pathTracerShader.DisableKeyword(_hasLightsKeyword);
         UpdateLights();
 
-        _bvhScene.Update();
         _pathTracerShader.SetKeyword(_hasTexturesKeyword, _bvhScene.HasTextures());
     }
 

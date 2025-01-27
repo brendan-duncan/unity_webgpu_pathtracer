@@ -44,8 +44,10 @@ StructuredBuffer<Light> Lights;
 #endif
 
 #if HAS_TLAS
-StructuredBuffer<TLASNode> TLASNodes;
-StructuredBuffer<uint> TLASIndices;
+uint TLASIndexOffset;
+StructuredBuffer<float> TLASData;
+//StructuredBuffer<TLASNode> TLASNodes;
+//StructuredBuffer<uint> TLASIndices;
 StructuredBuffer<BLASInstance> BLASInstances;
 
 StructuredBuffer<BVHNode> BVHNodes;

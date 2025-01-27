@@ -92,9 +92,9 @@ public class BVHScene
     GPUInstance[] _gpuInstances;
 
     int _gpuInstanceCount = 0;
-    ComputeBuffer _tlasNodesBuffer;
-    ComputeBuffer _tlasIndicesBuffer;
-    ComputeBuffer _gpuInstancesBuffer;
+    int _tlasIndexOffset = 0;
+    ComputeBuffer _tlasDataBuffer;
+    ComputeBuffer _blasInstancesBuffer;
 
     public void Start(bool useTlas)
     {
@@ -123,13 +123,8 @@ public class BVHScene
         _materialsBuffer?.Release();
         _textureDataBuffer?.Release();
 
-        _tlasNodesBuffer?.Release();
-        _tlasIndicesBuffer?.Release();
-        _gpuInstancesBuffer?.Release();
-    }
-
-    public void Update()
-    {
+        _tlasDataBuffer?.Release();
+        _blasInstancesBuffer?.Release();
     }
 
     public bool CanRender()
@@ -160,9 +155,9 @@ public class BVHScene
 
         if (_useTLAS)
         {
-            cmd.SetComputeBufferParam(shader, kernelIndex, "TLASNodes", _tlasNodesBuffer);
-            cmd.SetComputeBufferParam(shader, kernelIndex, "TLASIndices", _tlasIndicesBuffer);
-            cmd.SetComputeBufferParam(shader, kernelIndex, "BLASInstances", _gpuInstancesBuffer);
+            cmd.SetComputeIntParam(shader, "TLASIndexOffset", _tlasIndexOffset);
+            cmd.SetComputeBufferParam(shader, kernelIndex, "TLASData", _tlasDataBuffer);
+            cmd.SetComputeBufferParam(shader, kernelIndex, "BLASInstances", _blasInstancesBuffer);
         }
 
         if (_textureDataBuffer != null)
@@ -242,8 +237,6 @@ public class BVHScene
             int mti = mdi + kTextureOffset;
 
             float opacity = baseColor.a * (1.0f - transmission);
-
-            Debug.Log($"!!!! MATERIAL {material.name} transmission:{transmission} opacity:{opacity} ior:{ior}");
 
             materialData[mdi + 0] = Mathf.Pow(baseColor.r, 2.2f); // data1
             materialData[mdi + 1] = Mathf.Pow(baseColor.g, 2.2f);
@@ -723,8 +716,8 @@ public class BVHScene
 
         if (_useTLAS)
         {
-            _gpuInstancesBuffer = new ComputeBuffer(_gpuInstances.Length, kGPUInstanceSize);
-            _gpuInstancesBuffer.SetData(_gpuInstances);
+            _blasInstancesBuffer = new ComputeBuffer(_gpuInstances.Length, kGPUInstanceSize);
+            _blasInstancesBuffer.SetData(_gpuInstances);
             _gpuInstanceCount = _gpuInstances.Length;
 
             for (int i = 0; i < _blasInstances.Length; ++i)
@@ -744,8 +737,13 @@ public class BVHScene
             {
                 int tlasNodeSize = TinyBVH.GetTLASNodesSize(tlasIndex);
                 Debug.Log($"TLAS Nodes Size: {tlasNodeSize:n0}  Buffer Size: {tlasNodeSize:n0} {tlasIndicesPtr} bytes");
-                Utilities.UploadFromPointer(ref _tlasNodesBuffer, tlasNodesPtr, tlasNodeSize, 4);
-                Utilities.UploadFromPointer(ref _tlasIndicesBuffer, tlasIndicesPtr, _blasInstances.Length * 4, 4);
+
+                int tlasDataSize = tlasNodeSize + (_blasInstances.Length * 4);
+
+                _tlasIndexOffset = tlasNodeSize / 4;
+
+                Utilities.UploadFromPointer(ref _tlasDataBuffer, tlasNodesPtr, tlasNodeSize, 4, tlasDataSize, 0);
+                Utilities.UploadFromPointer(ref _tlasDataBuffer, tlasIndicesPtr, _blasInstances.Length * 4, 4, tlasDataSize, tlasNodeSize);
             }
 
             blasInstancesPtr.Dispose();
@@ -817,7 +815,7 @@ public class BVHScene
         if (!isDirty)
             return false;
 
-        _gpuInstancesBuffer.SetData(_gpuInstances);
+        _blasInstancesBuffer.SetData(_gpuInstances);
 
         NativeArray<BLASInstance> blasInstancesPtr = new(_blasInstances, Allocator.Persistent);
         IntPtr blasInstancesCPtr = (IntPtr)NativeArrayUnsafeUtility.GetUnsafeReadOnlyPtr(blasInstancesPtr);
@@ -827,8 +825,12 @@ public class BVHScene
         if (TinyBVH.GetTLASData(tlasIndex, out IntPtr tlasNodesPtr, out IntPtr tlasIndicesPtr))
         {
             int tlasNodeSize = TinyBVH.GetTLASNodesSize(tlasIndex);
-            Utilities.UploadFromPointer(ref _tlasNodesBuffer, tlasNodesPtr, tlasNodeSize, 4);
-            Utilities.UploadFromPointer(ref _tlasIndicesBuffer, tlasIndicesPtr, _blasInstances.Length * 4, 4);
+            int tlasDataSize = tlasNodeSize + (_blasInstances.Length * 4);
+
+            _tlasIndexOffset = tlasNodeSize / 4;
+
+            Utilities.UploadFromPointer(ref _tlasDataBuffer, tlasNodesPtr, tlasNodeSize, 4, tlasDataSize, 0);
+            Utilities.UploadFromPointer(ref _tlasDataBuffer, tlasIndicesPtr, _blasInstances.Length * 4, 4, tlasDataSize, tlasNodeSize);
         }
 
         blasInstancesPtr.Dispose();

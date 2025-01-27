@@ -48,6 +48,9 @@ float3 PathTrace(Ray ray, inout uint rngState)
 #endif
 
         // Debug hit properties
+        //radiance = hit.normal;
+        //break;
+
         /*float3 N = hit.normal;
         float3 T = normalize(hit.tangent);
         if (abs(dot(N, T)) < EPSILON)

@@ -233,50 +233,58 @@ bool RayIntersectBvh(const Ray worldRay, in BLASInstance instance, bool isShadow
     return hit.distance < FAR_PLANE;
 }
 
-bool RayIntersectTLAS(const Ray ray, inout RayHit hit, bool isShadowRay)
+bool RayIntersectTLAS(Ray ray, inout RayHit hit, bool isShadowRay)
 {
-    const float3 O = ray.origin;
-    const float3 D = normalize(ray.direction);
-    const float3 rD = rcp(D);
+    float3 O = ray.origin;
+    float3 D = normalize(ray.direction);
+    float3 rD = rcp(D);
 
     bool hitFound = false;
     uint stack[BVH_STACK_SIZE];
     uint nodeIndex = 0;
     uint stackPtr = 0;
-    //const Ray worldRay = ray;
+    uint count = 0;
 
-    while (true)
+    while (count++ < 1000)
+    //while (true)
     {
-        const TLASNode node = TLASNodes[nodeIndex];
-        const uint instanceCount = node.instanceCount;
+        uint nodeOffset = nodeIndex * TLASNodeSize;
+
+        uint instanceCount = asuint(TLASData[nodeOffset + 11]);
 
         if (instanceCount == 0)
         {
-            uint left = node.left;
-            const float3 lmin = node.lmin;
-            const float3 lmax = node.lmax;;
-            uint right = node.right;
-            const float3 rmin = node.rmin;
-            const float3 rmax = node.rmax;
+            float3 lmin = float3(TLASData[nodeOffset + 0],
+                TLASData[nodeOffset + 1],
+                TLASData[nodeOffset + 2]);
+            float3 lmax = float3(TLASData[nodeOffset + 4],
+                TLASData[nodeOffset + 5],
+                TLASData[nodeOffset + 6]);
+            float3 rmin = float3(TLASData[nodeOffset + 8],
+                TLASData[nodeOffset + 9],
+                TLASData[nodeOffset + 10]);
+            float3 rmax = float3(TLASData[nodeOffset + 12],
+                TLASData[nodeOffset + 13],
+                TLASData[nodeOffset + 14]);
+
+            uint left = asuint(TLASData[nodeOffset + 3]);
+            uint right = asuint(TLASData[nodeOffset + 7]);
 
             // child AABB intersection tests
-            const float3 t1a = (lmin - O) * rD;
-            const float3 t2a = (lmax - O) * rD;
-            const float3 t1b = (rmin - O) * rD;
-            const float3 t2b = (rmax - O) * rD;
-
-            const float3 minta = min3(t1a, t2a);
-            const float3 maxta = max3(t1a, t2a);
-            const float3 mintb = min3(t1b, t2b);
-            const float3 maxtb = max3(t1b, t2b);
-
-            const float tmina = max(max(max(minta.x, minta.y), minta.z), 0);
-            const float tmaxa = min(min(min(maxta.x, maxta.y), maxta.z), hit.distance);
-
-            const float tminb = max(max(max(mintb.x, mintb.y), mintb.z), 0);
-            const float tmaxb = min(min(min(maxtb.x, maxtb.y), maxtb.z), hit.distance);
-
+            float3 t1a = (lmin - O) * rD;
+            float3 t2a = (lmax - O) * rD;
+            float3 minta = min3(t1a, t2a);
+            float3 maxta = max3(t1a, t2a);
+            float tmina = max(max(max(minta.x, minta.y), minta.z), 0);
+            float tmaxa = min(min(min(maxta.x, maxta.y), maxta.z), hit.distance);
             float dist1 = select(tmina, FAR_PLANE, tmina > tmaxa);
+
+            float3 t1b = (rmin - O) * rD;
+            float3 t2b = (rmax - O) * rD;
+            float3 mintb = min3(t1b, t2b);
+            float3 maxtb = max3(t1b, t2b);
+            float tminb = max(max(max(mintb.x, mintb.y), mintb.z), 0);
+            float tmaxb = min(min(min(maxtb.x, maxtb.y), maxtb.z), hit.distance);
             float dist2 = select(tminb, FAR_PLANE, tminb > tmaxb);
 
             // traverse nearest child first
@@ -305,122 +313,14 @@ bool RayIntersectTLAS(const Ray ray, inout RayHit hit, bool isShadowRay)
             }
         }
 
-
         if (instanceCount > 0)
         {
-            const uint firstInstance = node.firstInstance;
+            uint firstInstance = asuint(TLASData[nodeOffset + 15]);
 
-            //uint i = 0;
             for (uint i = 0; i < instanceCount; ++i)
             {
-                const uint instanceIndex = TLASIndices[firstInstance + i];
-                const BLASInstance instance = BLASInstances[instanceIndex];
-                hitFound = RayIntersectBvh(ray, instance, isShadowRay, hit) | hitFound;
-
-                /*const float4x4 worldToLocal = instance.worldToLocal;
-                const float3 localOrigin = mul(worldToLocal, float4(worldRay.origin, 1.0f)).xyz;
-                // To handle instance scale, transform the ray direction to local space but do not normalize it
-                const float3 localDirection = mul(worldToLocal, float4(worldRay.direction, 0.0f)).xyz;
-                const Ray localRay = { localOrigin, localDirection };
-
-                float3 invDir = rcp(localRay.direction);
-                uint octinv4 = (7 - ((localRay.direction.x < 0 ? 4 : 0) | (localRay.direction.y < 0 ? 2 : 0) | (localRay.direction.z < 0 ? 1 : 0))) * 0x1010101;
-
-                bool hitFound = false;
-
-                stackPtr++;
-                const uint startStackPtr = stackPtr;
-                // 0x80000000 gets mis-compiled because FXC changes it to -0.0f, and Tint throws away the sign bit.
-                // Use 0x80000001 instead.
-                uint2 nodeGroup = uint2(0, 0x80000001);
-                uint2 triGroup = uint2(0, 0);
-
-                const int nodeOffset = instance.bvhOffset;
-
-                while (true)
-                {
-                    if (nodeGroup.y > 0x00FFFFFF)
-                    {
-                        // Convert the 0x80000001 back to 0x80000000
-                        if (nodeGroup.y == 0x80000001)
-                            nodeGroup.y -= 1;
-
-                        hit.steps++;
-                        uint mask = nodeGroup.y;
-                        uint childBitIndex = firstbithigh(mask);
-                        uint childNodeBaseIndex = nodeGroup.x;
-
-                        nodeGroup.y &= ~(1 << childBitIndex);
-                        if (nodeGroup.y > 0x00FFFFFF) 
-                            stack[stackPtr++] = nodeGroup;
-
-                        uint slotIndex = (childBitIndex - 24) ^ (octinv4 & 255);
-                        uint relativeIndex = countbits(mask & ~(0xFFFFFFFF << slotIndex));
-                        uint childNodeIndex = childNodeBaseIndex + relativeIndex;
-
-                        BVHNode node = BVHNodes[nodeOffset + childNodeIndex];
-                        uint hitmask = IntersectCWBVHNode(localRay.origin, invDir, octinv4, hit.distance, node);
-
-                        nodeGroup.x = asuint(node.n1.x);
-                        nodeGroup.y = (hitmask & 0xFF000000) | (asuint(node.n0.w) >> 24);
-                        triGroup.x = asuint(node.n1.y);
-                        triGroup.y = hitmask & 0x00FFFFFF;
-                        hit.steps++;
-                    }
-                    else
-                    {
-                        triGroup = nodeGroup;
-                        nodeGroup = uint2(0, 0);
-                    }
-
-                    // Process all triangles in the current group
-                    while (triGroup.y != 0)
-                    {
-                        hit.steps += 4;
-                        int triangleIndex = firstbithigh(triGroup.y);
-                        int triAddr = triGroup.x + (triangleIndex * 3);
-
-                        // Check intersection and update hit if its closer
-                        hitFound = IntersectTriangle(instance, instance.triOffset + triAddr, localRay, hit) | hitFound;
-
-                        triGroup.y -= 1 << triangleIndex;
-                    }
-
-                    if (nodeGroup.y <= 0x00FFFFFF)
-                    {
-                        if (stackPtr > startStackPtr) 
-                            nodeGroup = stack[--stackPtr];
-                        else
-                            break;
-                    }
-                }
-
-                if (!isShadowRay && hitFound)
-                {
-                    TriangleAttributes triAttr = TriangleAttributesBuffer[hit.triIndex];
-
-                    hit.intersectType = INTERSECT_TRIANGLE;
-
-                    // To handle instance scale, get the local space hit position and transform it back to world space
-                    hit.position = mul(instance.localToWorld, float4(localRay.origin + hit.distance * localRay.direction, 1.0f)).xyz;
-                    hit.distance = length(hit.position - worldRay.origin);
-
-                    hit.uv = InterpolateAttribute(hit.barycentric, triAttr.uv0, triAttr.uv1, triAttr.uv2);
-
-                    float3 normal = normalize(InterpolateAttribute(hit.barycentric, triAttr.normal0, triAttr.normal1, triAttr.normal2));
-                    // Use the transposed inverse to transform the normal to world space
-                    hit.normal = normalize(mul(float4(normal, 0.0f), instance.worldToLocal).xyz);
-
-                    float3 tangent = normalize(InterpolateAttribute(hit.barycentric, triAttr.tangent0, triAttr.tangent1, triAttr.tangent2));
-                    hit.tangent = normalize(mul(instance.localToWorld, float4(tangent, 0.0f)).xyz);
-
-                    hit.material = GetMaterial(Materials[instance.materialIndex], worldRay, hit);
-
-                    hit.ffnormal = dot(hit.normal, worldRay.direction) <= 0.0 ? hit.normal : -hit.normal;
-                    hit.eta = (dot(worldRay.direction, hit.normal) < 0.0) ? 1.0f / hit.material.ior : hit.material.ior;
-                }
-
-                stackPtr--;*/
+                uint instanceIndex = asuint(TLASData[TLASIndexOffset + firstInstance + i]);
+                hitFound = RayIntersectBvh(ray, BLASInstances[instanceIndex], isShadowRay, hit) | hitFound;
             }
 
             if (stackPtr > 0)
