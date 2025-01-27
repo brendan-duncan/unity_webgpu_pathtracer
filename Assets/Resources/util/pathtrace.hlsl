@@ -48,8 +48,6 @@ float3 PathTrace(Ray ray, inout uint rngState)
 #endif
 
         // Debug hit properties
-        //radiance = hit.distance / 20.0f;
-        //break;
         /*float3 N = hit.normal;
         float3 T = normalize(hit.tangent);
         if (abs(dot(N, T)) < EPSILON)
@@ -66,8 +64,11 @@ float3 PathTrace(Ray ray, inout uint rngState)
         maxRoughness = max(maxRoughness, material.roughness);
         material.roughness = maxRoughness;
 
+        //radiance = hit.normal;
+        //break;
+
         // Debug a material or intersection property
-        //radiance = material.specTrans;
+        //radiance = material.occlusion;
         //break;
 
         // Gather radiance from emissive objects. Emission from meshes is not importance sampled

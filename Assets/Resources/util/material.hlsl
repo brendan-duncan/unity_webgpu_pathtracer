@@ -8,11 +8,11 @@
 float3 GetEmission(MaterialData material, float2 uv)
 {
 #if HAS_TEXTURES
-    if (material.textures.w < 0.0f)
+    if (material.textures2.y < 0.0f)
         return material.data2.rgb;
     else
     {
-        float4 pixel = SampleTexture((int)material.textures.w, uv, true);
+        float4 pixel = SampleTexture((int)material.textures2.y, uv, true);
         return pixel.rgb;
     }
 #else
@@ -23,12 +23,12 @@ float3 GetEmission(MaterialData material, float2 uv)
 float3 GetNormalMapSample(MaterialData material, float2 uv)
 {
 #if HAS_TEXTURES
-    if (material.textures.z < 0.0f)
+    if (material.textures2.x < 0.0f)
         return float3(0.0f, 0.0f, 1.0f);
     else
     {
-        float4 pixel = SampleTexture((int)material.textures.z, uv, false);
-        return normalize(2.0f * pixel.rgb - 1.0f);
+        float4 pixel = SampleTexture((int)material.textures2.x, uv, false);
+        return pixel.rgb * 2.0f - 1.0f;
     }
 #else
     return float3(0.0f, 0.0f, 1.0f);
@@ -38,11 +38,11 @@ float3 GetNormalMapSample(MaterialData material, float2 uv)
 float2 GetMetallicRoughness(MaterialData material, float2 uv)
 {
 #if HAS_TEXTURES
-    if (material.textures.y < 0.0f)
+    if (material.textures1.y < 0.0f)
         return material.data3.rg;
     else
     {
-        float4 pixel = SampleTexture((int)material.textures.y, uv, true);
+        float4 pixel = SampleTexture((int)material.textures1.y, uv, true);
         return float2(pixel.b, pixel.g * pixel.g);
     }
 #else
@@ -53,16 +53,31 @@ float2 GetMetallicRoughness(MaterialData material, float2 uv)
 float4 GetBaseColorOpacity(MaterialData material, float2 uv)
 {
 #if HAS_TEXTURES
-    if (material.textures.x < 0.0f)
+    if (material.textures1.x < 0.0f)
         return material.data1;
     else
     {
         uv = uv * material.texture1Transform.xy + material.texture1Transform.zw;
-        float4 pixel = SampleTexture((int)material.textures.x, uv, true);
+        float4 pixel = SampleTexture((int)material.textures1.x, uv, true);
         return pixel * material.data1;
     }
 #else
     return material.data1;
+#endif
+}
+
+float GetOcclusion(MaterialData material, float2 uv)
+{
+#if HAS_TEXTURES
+    if (material.textures2.z < 0.0f)
+        return 1.0f;
+    else
+    {
+        float pixel = SampleTexture((int)material.textures2.z, uv, true).r;
+        return 1.0f + (pixel - 1.0f);
+    }
+#else
+    return 1.0f;
 #endif
 }
 
@@ -90,17 +105,30 @@ Material GetMaterial(in MaterialData materialData, in Ray ray, inout RayHit hit)
     material.specTrans = 1.0f - saturate(baseColorOpacity.a);
     material.ior = clamp(materialData.data3.w, 1.001f, 2.0f);
     material.anisotropic = clamp(materialData.data4.y, -0.9, 0.9);
+    material.occlusion = GetOcclusion(materialData, uv);
 
     float aspect = sqrt(1.0 - material.anisotropic * 0.9);
     material.ax = max(0.001, material.roughness / aspect);
     material.ay = max(0.001, material.roughness * aspect);
 
-    /*if (material.textures.z >= 0.0)
+    // Why can't I get normal maps to work?
+    /*if (materialData.textures2.x >= 0.0)
     {
-        float3 normalMap = GetNormalMapSample(material, uv);
-        float3 bitangent = cross(hit.normal, hit.tangent);
         float3 origNormal = hit.normal;
-        hit.normal = normalize(hit.tangent * normalMap.x + bitangent * normalMap.y + hit.normal * normalMap.z);
+
+        float3 normalMap = GetNormalMapSample(materialData, uv);
+        //normalMap *= float3(materialData.normalScale, materialData.normalScale, 1.0f);
+        float3 bitangent = normalize(cross(hit.tangent, hit.normal));
+        float3x3 tbn = float3x3(normalize(hit.tangent), bitangent, normalize(hit.normal));
+        hit.normal = normalize(mul(normalMap, tbn));
+        //hit.normal = normalMap;
+
+        // Update tangent to the perturbed normal, ensuring it's orthogonal to the normal
+        bitangent = normalize(cross(hit.normal, hit.tangent));
+        float bitangentSign = dot(bitangent, cross(hit.tangent, hit.normal)) < 0 ? -1 : 1;
+        bitangent *= bitangentSign;
+        hit.tangent = normalize(cross(bitangent, hit.normal)) * bitangentSign;
+
         hit.ffnormal = dot(origNormal, ray.direction) <= 0.0 ? hit.normal : -hit.normal;
     }*/
 

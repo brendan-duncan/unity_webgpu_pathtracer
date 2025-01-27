@@ -72,7 +72,7 @@ public class BVHScene
     const int kBVHTriSize = 16;
     // Number of float values in MaterialData in common.hlsl
     const int kMaterialSize = 32;
-    const int kTextureOffset = 24;
+    const int kTextureOffset = 22;
 
     List<MeshRenderer> _sceneMeshRenderers = new();
     List<Mesh> _meshes = new();
@@ -272,21 +272,21 @@ public class BVHScene
 
             materialData[mdi + 20] = clearCoatGloss; // data6
             materialData[mdi + 21] = 1.0f - opacity;
-            materialData[mdi + 22] = 0.0f;
-            materialData[mdi + 23] = 0.0f;
 
-            materialData[mti + 0] = -1.0f; // baseColorOpacity texture
-            materialData[mti + 1] = -1.0f; // metallicRoughness texture
-            materialData[mti + 2] = -1.0f; // normal texture
-            materialData[mti + 3] = -1.0f; // emission texture
+            materialData[mti + 0] = -1.0f; // baseColorOpacity texture (texture1.x)
+            materialData[mti + 1] = -1.0f; // metallicRoughness texture (texture1.y)
+            materialData[mti + 2] = -1.0f; // normal texture (texture2.x)
+            materialData[mti + 3] = -1.0f; // emission texture (texture2.y)
+            materialData[mti + 4] = -1.0f; // occlusion texture (texture2.z)
+            materialData[mti + 5] = -1.0f; // padding (texture2.w)
 
             Vector2 uvScale = material.HasTexture("_MainTex") ? material.mainTextureScale : Vector2.one;
             Vector2 uvOffset = material.HasTexture("_MainTex") ? material.mainTextureOffset : Vector2.zero;
 
-            materialData[mti + 4] = uvScale.x;
-            materialData[mti + 5] = uvScale.y;
-            materialData[mti + 6] = uvOffset.x;
-            materialData[mti + 7] = uvOffset.y;
+            materialData[mti + 6] = uvScale.x;
+            materialData[mti + 7] = uvScale.y;
+            materialData[mti + 8] = uvOffset.x;
+            materialData[mti + 9] = uvOffset.y;
 
             // BaseColor texture
             Texture mainTex = material.HasProperty("_MainTex") ? material.GetTexture("_MainTex")
@@ -353,6 +353,23 @@ public class BVHScene
                 {
                     textures.Add(emissionTex);
                     materialData[mti + 3] = textures.Count - 1;
+                }
+            }
+
+            // Occlusion texture
+            Texture occlusionTex = material.HasProperty("_OcclusionMap") ? material.GetTexture("_OcclusionMap")
+                : material.HasProperty("occlusionTexture") ? material.GetTexture("occlusionTexture")
+                : null;
+            if (occlusionTex)
+            {
+                if (textures.Contains(occlusionTex))
+                {
+                    materialData[mti + 4] = textures.IndexOf(occlusionTex);
+                }
+                else
+                {
+                    textures.Add(occlusionTex);
+                    materialData[mti + 4] = textures.Count - 1;
                 }
             }
         }

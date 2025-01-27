@@ -219,6 +219,8 @@ float3 _EvalBRDF(in RayHit hit, in Material mat, float3 V, float3 N, float3 L, i
         pdf += tmpPdf * clearCtPr;
     }
 
+    f *= mat.occlusion;
+
     return f * abs(L.z);
 }
 

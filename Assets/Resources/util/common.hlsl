@@ -70,8 +70,9 @@ struct MaterialData
     float4 data3;
     float4 data4;
     float4 data5;
-    float4 data6;
-    float4 textures;
+    float2 data6;
+    float2 textures1;
+    float4 textures2;
     float4 texture1Transform;
 };
 
@@ -122,7 +123,7 @@ struct Material
     float ax;
     float ay;
     float eta;
-    float padding;
+    float occlusion;
 
     //Medium medium;
 };
