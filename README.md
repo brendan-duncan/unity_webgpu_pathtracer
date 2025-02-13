@@ -21,3 +21,7 @@ Code for this project has been inspired by, or copied directly from the followin
 * https://github.com/knightcrawler25/GLSL-PathTracer
 * https://raytracing.github.io
 * https://pbrt.org
+
+----
+
+![Unity Webgpu Pathtracer](unity_webgpu_pathtracer.png)
