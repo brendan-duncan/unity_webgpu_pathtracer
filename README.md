@@ -1,6 +1,13 @@
 
 ## References
 
+Yet another path tracer. 
+
+This one is built on top of Unity specifically targetting WebgGPU.
+
+This is a work in progress, it has issues and needs a lot of cleanup. I have a lot of
+ideas for it, and will get back to it at some point.
+
 Code for this project has been inspired by, or copied directly from the following:
 
 * https://github.com/jbikker/tinybvh
