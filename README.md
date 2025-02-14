@@ -24,4 +24,4 @@ Code for this project has been inspired by, or copied directly from the followin
 
 ----
 
-![Unity Webgpu Pathtracer](unity_webgpu_pathtracer.png)
+![Unity Webgpu Pathtracer](unity_webgpu_pathtracer.jpg)
