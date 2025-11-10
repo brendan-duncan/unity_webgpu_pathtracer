@@ -8,6 +8,7 @@
 
 #define TINYBVH_IMPLEMENTATION
 #define TINYBVH_NO_SIMD
+#define NO_THREADED_BUILDS
 #include "tiny_bvh.h"
 
 extern "C" 
